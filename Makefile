@@ -1,6 +1,6 @@
 build:
-	go build -o bin/server ./cmd/server
+	go build -o bin/main ./cmd/main
 
 run: build
-	go run ./cmd/server
+	go run ./cmd/main
 
