@@ -90,7 +90,19 @@ func (s *Server) HandleWS(res http.ResponseWriter, req *http.Request) {
   if user.isSpectator {
     room.spectatorLoop(&user)
   } else {
-    room.playerLoop(&user, params)
+    room.sendSetupData(&user, params.Content.Deck)
+
+    <- room.awaitingAllReady
+
+    fmt.Println("Starting game for player")
+
+    err := room.startGame(&user)
+    if err != nil {
+      log.Printf("Error starting game: %s", err)
+      return
+    }
+
+    room.playerLoop(&user)
   }
 
 }
