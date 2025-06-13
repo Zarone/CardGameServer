@@ -1,335 +1,378 @@
 package server
 
 import (
-  "fmt"
-  "log"
-  "math/rand"
-  "errors"
-  "time"
-  "encoding/json"
-  "github.com/Zarone/CardGameServer/cmd/gamemanager"
-  "github.com/Zarone/CardGameServer/cmd/helper"
-  "github.com/gorilla/websocket"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"math/rand"
+	"sync"
+	"time"
+
+	"github.com/Zarone/CardGameServer/cmd/gamemanager"
+	"github.com/gorilla/websocket"
 )
 
 type User struct {
-  conn *websocket.Conn
-  isSpectator bool
+	Conn *websocket.Conn
+	IsSpectator bool
 }
 
 type CoinFlip uint8
 const (
-  CoinFlipUnset = CoinFlip(0)
-  CoinFlipHead  = CoinFlip(1)
-  CoinFlipTail  = CoinFlip(2)
+	CoinFlipUnset = CoinFlip(0)
+	CoinFlipHead  = CoinFlip(1)
+	CoinFlipTail  = CoinFlip(2)
 )
 
+const PlayersToStartGame uint8 = 2
+
 type Room struct {
-  connections map[*User]bool
-  playerToGamePlayerID map[*User]uint8
-  game *gamemanager.Game
-  readyPlayers []*User
-  awaitingAllReady chan bool
-  expectingCoinFlip CoinFlip
+	Connections           map[*User]bool
+	PlayerToGamePlayerID  map[*User]uint8
+	Game                  *gamemanager.Game
+	ReadyPlayersMutex     sync.Mutex
+	ReadyPlayers          []*User
+	AwaitingAllReady      chan bool
+	ExpectingCoinFlip     CoinFlip
+	RoomNumber            uint8
+	RoomDescription       string
 }
 
-const playersToStartGame uint8 = 2
-
-// returns the number of players in the room,
+// GetPlayersInRoom returns the number of players in the room,
 // excluding spectators
-func (r *Room) getPlayersInRoom() uint8 {
-  var num uint8 = 0
+func (r *Room) GetPlayersInRoom() uint8 {
+	var num uint8 = 0
 
-  for player, isActive := range r.connections {
-    if !player.isSpectator && isActive {
-      num++
-    }
-  }
+	for player, isActive := range r.Connections {
+		if !player.IsSpectator && isActive {
+			num++
+		}
+	}
 
-  return num
+	return num
 }
 
-func (r *Room) initPlayer(user *User) error {
-  fmt.Println("Consider race condition for r.readyPlayers")
+func (r *Room) InitPlayer(user *User) error {
+	if len(r.ReadyPlayers) >= int(PlayersToStartGame) {
+		return errors.New("too many players")
+	}
 
-  if len(r.readyPlayers) >= int(playersToStartGame) {
-    return errors.New("Too many players")
-  }
+	r.PlayerToGamePlayerID[user] = r.Game.AddPlayer() 
+	r.ReadyPlayersMutex.Lock()
+	r.ReadyPlayers = append(r.ReadyPlayers, user)
+	r.ReadyPlayersMutex.Unlock()
 
-  r.playerToGamePlayerID[user] = r.game.AddPlayer() 
-  r.readyPlayers = append(r.readyPlayers, user)
-
-  return nil
+	return nil
 }
 
-func (r *Room) checkAllReady() {
-  if len(r.readyPlayers) == int(playersToStartGame) {
-    for i := 0; i < int(playersToStartGame); i++ {
-      r.awaitingAllReady <- true
-    }
-  }
+func (r *Room) SetAllReady() {
+	for i := 0; i < int(PlayersToStartGame); i++ {
+		r.AwaitingAllReady <- true
+	}
 }
 
-func (r *Room) toString() string {
-  str := ""
-  for user, isPresent := range r.connections {
-    str += fmt.Sprintf("[ConnectionPointer: %p, isPresent: %t, isSpectator: %t], ", user.conn, isPresent, user.isSpectator)
-  }
-  return str
+// CheckAllReady returns true if all players are ready.
+func (r *Room) CheckAllReady() bool {
+	return len(r.ReadyPlayers) == int(PlayersToStartGame)
+}
+
+func (r *Room) String() string {
+	str := ""
+	for user, isPresent := range r.Connections {
+		str += fmt.Sprintf("[ConnectionPointer: %p, isPresent: %t, isSpectator: %t], ", user.Conn, isPresent, user.IsSpectator)
+	}
+	return str
 }
 
 // Sends the deck list to the game state manager to 
-// set it up
-func (r *Room) sendSetupData(u *User, deck []int) {
-  r.game.SetupPlayer(r.playerToGamePlayerID[u], deck)
+// set it up. Returns the gameID list in the same
+// order as the cardID list
+func (r *Room) initGameData(u *User, deck []uint) *[]uint {
+	return r.Game.SetupPlayer(r.PlayerToGamePlayerID[u], deck)
 }
 
 // Takes info from client regarding their deck list 
 // and such
 func (r *Room) readSetupParams(user *User) (*Message[SetupContent], error) {
-  if (user.isSpectator) { return nil, nil }
+	if (user.IsSpectator) { return nil, nil }
 
-  defer r.checkAllReady()
+	// if this is the last player to join
+	// then tell the other players the game
+	// is ready to setup
+	defer func(){ 
+		if r.CheckAllReady() {
+			r.SetAllReady()
+			r.RoomDescription = "All players had parameters read..." 
+		}
+	}()
 
-  // read in a message
-  _, p, err := user.conn.ReadMessage()
-  if err != nil {
-    return nil, errors.New(fmt.Sprintf("Error Reading Message {%s}", err))
-  }
+	// read in a message
+	_, p, err := user.Conn.ReadMessage()
+	if err != nil {
+		return nil, fmt.Errorf("error Reading Message {%s}", err)
+	}
 
-  // print out that message for clarity
-  log.Printf("Setup Message: %s", string(p))
+	var params Message[SetupContent] 
+	if err := json.Unmarshal(p, &params); err != nil {
+		return nil, fmt.Errorf("error parsing JSON: %s", err)
+	} else if (params.MessageType != MessageTypeSetup) {
+		return nil, fmt.Errorf("error setting up, message type is %s", params.MessageType)
+	}
 
-  var params Message[SetupContent] 
-  
-  if err := json.Unmarshal(p, &params); err != nil {
-    return nil, errors.New(fmt.Sprintf("Error parsing JSON: %s", err))
-  }
-
-  if (params.MessageType != MessageTypeSetup) {
-    return nil, errors.New(fmt.Sprintf("Error setting up, message type is %s", params.MessageType))
-  }
-
-  log.Println("Setup Message (Parsed):", params.toString())
-
-  if err := user.conn.WriteMessage(websocket.TextMessage, p); err != nil {
-    return nil, errors.New(fmt.Sprintf("Error writing message: %s", err))
-  }
-
-  return &params, nil
+	return &params, nil
 }
 
 // Attempts to remove connection to the room specified by the request
-func (r *Room) removeFromRoom(user *User) {
-  if len(r.connections) == 0 {
-    log.Println("Error removing from room")
-    return
-  }
+func (r *Room) RemoveFromRoom(user *User) {
+	if len(r.Connections) == 0 {
+		log.Println("Error removing from room")
+		return
+	}
 
-  if (!user.isSpectator) {
-    fmt.Println("Implement player disconnect")
-  }
+	if (!user.IsSpectator) {
+		fmt.Println("Implement player disconnect")
+	}
 
-  r.connections[user] = false
-
-  helper.DebugPrint(r.toString())
+	r.Connections[user] = false
 }
 
 func (r *Room) readForActions(ws *websocket.Conn) (gamemanager.Action, error) {
-  // read in a message
-  messageType, p, err := ws.ReadMessage()
-  if err != nil {
-    return gamemanager.Action{}, errors.New(fmt.Sprintf("Error Reading Message {%s}", err))
-  }
+	// read in a message
+	messageType, p, err := ws.ReadMessage()
+	if err != nil {
+		return gamemanager.Action{}, fmt.Errorf("Error Reading Message {%s}", err)
+	}
 
-  // print out that message for clarity
-  log.Printf("Message: %s", string(p))
+	// print out that message for clarity
+	log.Printf("Message: %s", string(p))
 
-  if err := ws.WriteMessage(messageType, p); err != nil {
-    return gamemanager.Action{}, errors.New(fmt.Sprintf("Error writing message %s", err))
-  }
+	if err := ws.WriteMessage(messageType, p); err != nil {
+		return gamemanager.Action{}, fmt.Errorf("Error writing message %s", err)
+	}
 
-  return gamemanager.Action{}, nil
+	return gamemanager.Action{}, nil
 }
 
 func (r *Room) processAction(user *User, action *gamemanager.Action) {
-  r.game.ProcessAction(r.playerToGamePlayerID[user], action)
+	r.Game.ProcessAction(r.PlayerToGamePlayerID[user], action)
 }
 
 func (r *Room) spectatorLoop(user *User) {
-  for {
-    _, err := r.readForActions(user.conn)
-
-    if (err != nil) {
-      log.Println("Stopped reading from user, endcode: ", err)
-      break
-    }
-  }
-}
-
-type CardMovement struct {
-  CardID  uint `json:"cardId"`
-  From    uint `json:"from"`
-  To      uint `json:"to"`
+	for {
+		_, err := r.readForActions(user.Conn)
+		if (err != nil) {
+			log.Println("Stopped reading from user, endcode: ", err)
+			break
+		}
+	}
 }
 
 // returns (true, nil) if player 1 is going first
 func (r *Room) askTurnOrder() (bool, error) {
-  isHeads := rand.Intn(2) == 1 
+	isHeads := rand.Intn(2) == 1 
 
-  var userChoosingFlip *User
-  var userWaiting *User
-  if (isHeads == (r.expectingCoinFlip == CoinFlipHead)) {
-    // if player 1 was right, then player 1 chooses
-    userChoosingFlip = r.readyPlayers[0]
-    userWaiting = r.readyPlayers[1]
-  } else {
-    // if player 1 was wrong, then player 2 chooses
-    userChoosingFlip = r.readyPlayers[1]
-    userWaiting = r.readyPlayers[0]
-  }
+	var userChoosingFlip *User
+	var userWaiting *User
+	if (isHeads == (r.ExpectingCoinFlip == CoinFlipHead)) {
+		// if player 1 was right, then player 1 chooses
+		userChoosingFlip = r.ReadyPlayers[0]
+		userWaiting = r.ReadyPlayers[1]
+	} else {
+		// if player 1 was wrong, then player 2 chooses
+		userChoosingFlip = r.ReadyPlayers[1]
+		userWaiting = r.ReadyPlayers[0]
+	}
 
-  userChoosingFlip.conn.WriteJSON(Message[StartGameContent]{
-    Content: StartGameContent {
-      IsChoosingTurnOrder: true,
-    },
-    MessageType: MessageTypeHeadsOrTails,
-  })
-  userWaiting.conn.WriteJSON(Message[StartGameContent]{
-    Content: StartGameContent {
-      IsChoosingTurnOrder: false,
-    },
-    MessageType: MessageTypeFirstOrSecond,
-  })
+	userChoosingFlip.Conn.WriteJSON(Message[StartGameContent]{
+		Content: StartGameContent {
+			IsChoosingTurnOrder: true,
+		},
+		MessageType: MessageTypeHeadsOrTails,
+		Timestamp: timestamp(),
+	})
+	userWaiting.Conn.WriteJSON(Message[StartGameContent]{
+		Content: StartGameContent {
+			IsChoosingTurnOrder: false,
+		},
+		MessageType: MessageTypeFirstOrSecond,
+		Timestamp: timestamp(),
+	})
 
-  var decisionResponse Message[StartGameContentChoice]
+	var decisionResponse Message[StartGameContentChoice]
 
-  userChoosingFlip.conn.ReadJSON(decisionResponse)
-  if decisionResponse.MessageType != MessageTypeFirstOrSecondChoice {
-    return false, errors.New(
-      "Client response was expected to be a first or second choice, but was instead " + 
-      string(decisionResponse.MessageType),
-    )
-  }
-  
-  return (userChoosingFlip == r.readyPlayers[0]) == decisionResponse.Content.First, nil
+	_, p, err := userChoosingFlip.Conn.ReadMessage()
+	if err != nil {
+		return false, fmt.Errorf("error asking turn order: %s", err.Error())
+	}
+
+	err = json.Unmarshal(p, &decisionResponse)
+	if err != nil {
+		return false, fmt.Errorf("error asking turn order: %s", err.Error())
+	}
+
+	if decisionResponse.MessageType != MessageTypeFirstOrSecondChoice {
+		return false, errors.New(
+			"client response was expected to be a first or second choice, but was instead " + 
+			string(decisionResponse.MessageType),
+		)
+	}
+	
+	return (userChoosingFlip == r.ReadyPlayers[0]) == decisionResponse.Content.First, nil
+}
+
+func timestamp() string {
+	return fmt.Sprint(time.Now().Format("20060102150405"))
+}
+
+func (r *Room) headsOrTails(user *User) error {
+	if (r.PlayerToGamePlayerID[user] == 0) {
+		// this player chooses heads or tails
+		var update Message[CoinFlipContent] = Message[CoinFlipContent]{
+			Content: CoinFlipContent {
+				IsChoosingFlip: true,
+			},
+			MessageType: MessageTypeHeadsOrTails,
+			Timestamp: timestamp(),
+		}
+		err := user.Conn.WriteJSON(update)
+		if err != nil {
+			return errors.New("failed to WriteJSON for update")
+		}
+		var decisionResponse Message[CoinFlipContentChoice]
+
+		_, p, err := user.Conn.ReadMessage()
+		if err != nil {
+			return errors.New("failed to ReadJSON for CoinFlipContentChoice")
+		}
+
+		err = json.Unmarshal(p, &decisionResponse)
+		if err != nil {
+			return errors.New("failed to decode JSON")
+		}
+
+		if decisionResponse.MessageType != MessageTypeCoinChoice {
+			return errors.New(
+				"client response was expected to be a coin choice, but was instead " + 
+				string(decisionResponse.MessageType),
+			)
+		}
+
+		if decisionResponse.Content.Heads {
+			r.ExpectingCoinFlip = CoinFlipHead
+		} else {
+			r.ExpectingCoinFlip = CoinFlipTail
+		}
+
+		r.SetAllReady()
+		r.RoomDescription = "Heads/Tails Chosen..."
+
+	} else if (r.PlayerToGamePlayerID[user] == 1) {
+		// this player waits
+		var update Message[CoinFlipContent] = Message[CoinFlipContent]{
+			Content: CoinFlipContent {
+				IsChoosingFlip: false,
+			},
+			MessageType: MessageTypeHeadsOrTails,
+			Timestamp: timestamp(),
+		}
+		user.Conn.WriteJSON(update)
+	} else {
+		log.Println("Haven't handled scenario with more than 2 players")
+	}
+
+	return nil
+}
+
+func (r *Room) sendInitialGameState(goingFirst bool) {
+	p1Moves, p2Moves := r.Game.StartGame()
+
+	r.ReadyPlayers[0].Conn.WriteJSON(Message[UpdateInfo]{
+		Content: UpdateInfo{
+			Movements: *p1Moves,
+			Phase: 0,
+			Pile: gamemanager.NO_PILE,
+			OpenViewCards: make([]uint, 0),
+			MyTurn: goingFirst,
+		},
+		MessageType: MessageTypeGameplay,
+		Timestamp: timestamp(),
+	})
+	r.ReadyPlayers[1].Conn.WriteJSON(Message[UpdateInfo]{
+		Content: UpdateInfo{
+			Movements: *p2Moves,
+			Phase: 0,
+			Pile: gamemanager.NO_PILE,
+			OpenViewCards: make([]uint, 0),
+			MyTurn: !goingFirst,
+		},
+		MessageType: MessageTypeGameplay,
+		Timestamp: timestamp(),
+	})
 }
 
 func (r *Room) startGame(user *User) error {
-  if (r.playerToGamePlayerID[user] == 0) {
-    // this player chooses heads or tails
-    var update Message[CoinFlipContent] = Message[CoinFlipContent]{
-      Content: CoinFlipContent {
-        IsChoosingFlip: true,
-      },
-      MessageType: MessageTypeHeadsOrTails,
-      Timestamp: fmt.Sprint(time.Now().Format("20060102150405")),
-    }
-    user.conn.WriteJSON(update)
-    var decisionResponse Message[CoinFlipContentChoice]
+	r.headsOrTails(user)
 
-    user.conn.ReadJSON(decisionResponse)
-    if decisionResponse.MessageType != MessageTypeCoinChoice {
-      return errors.New(
-        "Client response was expected to be a coin choice, but was instead " + 
-        string(decisionResponse.MessageType),
-      )
-    }
+	// wait until player 1 chosen heads or tails
+	r.wait()
 
-    if decisionResponse.Content.Heads {
-      r.expectingCoinFlip = CoinFlipHead
-    } else {
-      r.expectingCoinFlip = CoinFlipTail
-    }
+	if (r.ExpectingCoinFlip == CoinFlipUnset) {
+		return errors.New("coin Flip isn't set by evaluation time")
+	}
+	
+	// arbitrarily let player 1 execute the following below,
+	// or rather let the server call initiated by player 1 
+	// execute the below code
+	if r.PlayerToGamePlayerID[user] != 0 { 
+		r.wait()
+		return nil
+	} else {
+		// you have to do this so that at the end of the function
+		// wait is always called. This makes sure the r.AwaitingAllReady
+		// channel is reset.
+		defer r.wait()
+	}
 
-    for i := 0; i < int(playersToStartGame); i++ {
-      r.awaitingAllReady <- true
-    }
+	goingFirst, err := r.askTurnOrder()
+	if err != nil {
+		return err
+	}
 
-  } else if (r.playerToGamePlayerID[user] == 1) {
-    // this player waits
-    var update Message[CoinFlipContent] = Message[CoinFlipContent]{
-      Content: CoinFlipContent {
-        IsChoosingFlip: false,
-      },
-      MessageType: MessageTypeHeadsOrTails,
-      Timestamp: fmt.Sprint(time.Now().Format("20060102150405")),
-    }
-    user.conn.WriteJSON(update)
-  } else {
-    log.Println("Haven't handled scenario with more than 2 players")
-  }
+	r.sendInitialGameState(goingFirst)
 
-  // wait until coin flip decided
-  <- r.awaitingAllReady
+	r.SetAllReady()
+	r.RoomDescription = "Initial Game State Sent to Clients..."
 
-  if (r.expectingCoinFlip == CoinFlipUnset) {
-    return errors.New("Coin Flip isn't set by evaluation time")
-  }
-  
-  // arbitrarily let player 1 execute the following below,
-  // or rather let the server call initiated by player 1 
-  // execute the below code
-  if r.playerToGamePlayerID[user] != 0 { 
-    <- r.awaitingAllReady
-    return nil
-  }
-
-  goingFirst, err := r.askTurnOrder()
-  if err != nil {
-    return err
-  }
-
-  r.readyPlayers[0].conn.WriteJSON(Message[UpdateInfo]{
-    Content: UpdateInfo{
-      Movements: make([]CardMovement, 0),
-      Phase: 0,
-      Pile: 0,
-      OpenViewCards: make([]uint, 0),
-      MyTurn: goingFirst,
-    },
-    MessageType: MessageTypeGameplay,
-    Timestamp: fmt.Sprint(time.Now().Format("20060102150405")),
-  })
-  r.readyPlayers[1].conn.WriteJSON(Message[UpdateInfo]{
-    Content: UpdateInfo{
-      Movements: make([]CardMovement, 0),
-      Phase: 0,
-      Pile: 0,
-      OpenViewCards: make([]uint, 0),
-      MyTurn: !goingFirst,
-    },
-    MessageType: MessageTypeGameplay,
-    Timestamp: fmt.Sprint(time.Now().Format("20060102150405")),
-  })
-
-  for i := 0; i < int(playersToStartGame)-1; i++ {
-    r.awaitingAllReady <- true
-  }
-
-  return nil
+	return nil
 }
 
 func (r *Room) playerLoop(user *User) {
-  for {
-    action, err := r.readForActions(user.conn)
+	for {
+		action, err := r.readForActions(user.Conn)
 
-    if (err != nil) {
-      log.Println("Stopped reading from user, endcode: ", err)
-      break
-    }
+		if (err != nil) {
+			log.Println("Stopped reading from user, endcode: ", err)
+			break
+		}
 
-    r.processAction(user, &action)
-  }
+		r.processAction(user, &action)
+	}
 }
 
-func makeRoom() *Room {
-  return &Room{
-    playerToGamePlayerID: make(map[*User]uint8),
-    connections: make(map[*User]bool),
-    game: gamemanager.MakeGame(),
-    readyPlayers: make([]*User, 0),
-    awaitingAllReady: make(chan bool, playersToStartGame),
-    expectingCoinFlip: CoinFlipUnset,
-  }
+func (r *Room) wait() {
+	<- r.AwaitingAllReady
+}
+
+func MakeRoom(roomNumber uint8) *Room {
+	return &Room{
+		PlayerToGamePlayerID: make(map[*User]uint8),
+		Connections: make(map[*User]bool),
+		Game: gamemanager.MakeGame(),
+		ReadyPlayers: make([]*User, 0),
+		AwaitingAllReady: make(chan bool, PlayersToStartGame),
+		ExpectingCoinFlip: CoinFlipUnset,
+		RoomNumber: roomNumber,
+		RoomDescription: "Just Created...",
+	}
 }

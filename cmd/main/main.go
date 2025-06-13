@@ -12,7 +12,11 @@ func main() {
 
   // example path: /socket?room=3&spectator=true
   http.HandleFunc("/socket", myServer.HandleWS)
+  
+  // Add handlers for rooms page and API
+  http.HandleFunc("/", myServer.HandleRoomsPage)
+  http.HandleFunc("/api/rooms", myServer.HandleRoomsAPI)
 
-  fmt.Print("Hello from Server\n")
+  fmt.Println("Hello from Server")
   log.Fatal(http.ListenAndServe(":3000", nil))
 }

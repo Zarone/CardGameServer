@@ -1,6 +1,11 @@
 package server
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Zarone/CardGameServer/cmd/gamemanager"
+)
+
 
 type MessageType string
 const (
@@ -20,7 +25,7 @@ type Message[T any] struct {
 
 // Message Content Types
 type SetupContent struct {
-  Deck []int `json:"deck"`
+  Deck []uint `json:"deck"`
 }
 type CoinFlipContent struct {
   IsChoosingFlip bool `json:"isChoosingFlip"`
@@ -37,14 +42,14 @@ type StartGameContentChoice struct {
 //
 
 type UpdateInfo struct {
-  Movements     []CardMovement  `json:"movements"`
-  Phase         uint            `json:"phase"`
-  Pile          uint            `json:"pile"`
-  OpenViewCards []uint          `json:"openViewCards"`
-  MyTurn        bool            `json:"myTurn"`
+  Movements     []gamemanager.CardMovement  `json:"movements"`
+  Phase         uint                        `json:"phase"`
+  Pile          gamemanager.Pile            `json:"pile"`
+  OpenViewCards []uint                      `json:"openViewCards"`
+  MyTurn        bool                        `json:"myTurn"`
 }
 
-func (params *Message[T]) toString() string {
+func (params *Message[T]) String() string {
   contentString := fmt.Sprint(params.Content) 
   return fmt.Sprintf("[Content: %s, Type: %s, Time: %s]\n", contentString, params.MessageType, params.Timestamp)
 }
