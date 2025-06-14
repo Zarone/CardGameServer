@@ -139,7 +139,7 @@ func (r *Room) RemoveFromRoom(user *User) {
 
 func (r *Room) readForActions(ws *websocket.Conn) (gamemanager.Action, error) {
 	// read in a message
-	messageType, p, err := ws.ReadMessage()
+	_, p, err := ws.ReadMessage()
 	if err != nil {
 		return gamemanager.Action{}, fmt.Errorf("Error Reading Message {%s}", err)
 	}
@@ -147,11 +147,18 @@ func (r *Room) readForActions(ws *websocket.Conn) (gamemanager.Action, error) {
 	// print out that message for clarity
 	log.Printf("Message: %s", string(p))
 
-	if err := ws.WriteMessage(messageType, p); err != nil {
+  // unmarshal into gameaction
+  var action gamemanager.Action;
+  err = json.Unmarshal(p, &action)
+  if err != nil {
+    return gamemanager.Action{}, fmt.Errorf("Error Getting Game Action from Message")
+  }
+
+	if err := ws.WriteJSON(action); err != nil {
 		return gamemanager.Action{}, fmt.Errorf("Error writing message %s", err)
 	}
 
-	return gamemanager.Action{}, nil
+	return action, nil
 }
 
 func (r *Room) processAction(user *User, action *gamemanager.Action) {

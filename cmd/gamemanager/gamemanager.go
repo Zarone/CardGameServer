@@ -1,6 +1,9 @@
 package gamemanager
 
 type Action struct {
+  ActionType    string  `json:"type"`
+  SelectedCard  uint    `json:"selectedCard"`
+  From          string  `json:"from"`
 }
 
 type Game struct {

@@ -39,8 +39,6 @@ type StartGameContent struct {
 type StartGameContentChoice struct {
   First bool `json:"first"`
 }
-//
-
 type UpdateInfo struct {
   Movements     []gamemanager.CardMovement  `json:"movements"`
   Phase         uint                        `json:"phase"`
@@ -48,6 +46,8 @@ type UpdateInfo struct {
   OpenViewCards []uint                      `json:"openViewCards"`
   MyTurn        bool                        `json:"myTurn"`
 }
+// gamemanager.Action also counts as one of these
+//
 
 func (params *Message[T]) String() string {
   contentString := fmt.Sprint(params.Content) 
