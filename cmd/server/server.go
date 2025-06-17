@@ -82,11 +82,13 @@ func (s *Server) HandleWS(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+  fmt.Println("Reading setup params")
 	params, err := room.readSetupParams(&user)
 	if err != nil {
 		log.Printf("Error reading setup parameters %s", err)
 		return
 	}
+  fmt.Println("Read setup params: ", *params)
 
 	if user.IsSpectator {
 		room.spectatorLoop(&user)
@@ -101,6 +103,7 @@ func (s *Server) HandleWS(res http.ResponseWriter, req *http.Request) {
 		// Wait for all players to finish initialization
 		room.wait()
 
+    fmt.Println("about to start game")
 		err := room.startGame(&user)
 		if err != nil {
 			log.Printf("Error starting game: %s", err)

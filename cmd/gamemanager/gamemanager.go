@@ -1,9 +1,15 @@
 package gamemanager
 
+import "fmt"
+
 type Action struct {
-  ActionType    string  `json:"type"`
-  SelectedCard  uint    `json:"selectedCard"`
-  From          string  `json:"from"`
+  ActionType    ActionType  `json:"type"`
+  SelectedCards []uint      `json:"selectedCards"`
+  From          Pile        `json:"from"`
+}
+
+func (a *Action) String() string {
+  return fmt.Sprintf("{ActionType: %s, SelectedCards: %s, From: %s}\n", a.ActionType, a.SelectedCards, a.From)
 }
 
 type Game struct {
@@ -59,11 +65,100 @@ func (g *Game) String() string {
 func (g *Game) StartGame() (*[]CardMovement, *[]CardMovement) {
 	g.Players[0].Deck.shuffle()
 	g.Players[1].Deck.shuffle()
-	return g.Players[0].Deck.moveFromTopTo(&g.Players[0].Hand, 7), 
+  fmt.Println(g.Players[0], g.Players[1])
+  out1, out2 := g.Players[0].Deck.moveFromTopTo(&g.Players[0].Hand, 7), 
 		g.Players[1].Deck.moveFromTopTo(&g.Players[1].Hand, 7)
+  fmt.Println(g.Players[0], g.Players[1])
+	return out1, out2
 }
 
-func (g *Game) ProcessAction(user uint8, action *Action) {
+func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
+
+  if (ActionType(action.ActionType) == ActionTypeSelectCard) {
+    fmt.Printf("Action: Play Card\n")
+
+    if (len(action.SelectedCards) != 1) {
+      return UpdateInfo{}, fmt.Errorf("Play card was triggered with multiple cards")
+    }
+
+    if (action.From == HAND_PILE) {
+      card := g.Players[user].Hand.find(action.SelectedCards[0])
+      if card == nil {
+        fmt.Printf("Can't find card\n")
+        return UpdateInfo{}, fmt.Errorf("Can't find card\n")
+      }
+
+      if card.ID == 5 {
+        movements := make([]CardMovement, 0, 1)
+        movements = append(movements, CardMovement{
+          From: HAND_PILE,
+          To: DISCARD_PILE,
+          CardID: card.GameID,
+        })
+        selectableCards := make([]uint, 0, len(g.Players[user].Hand.Cards)-1)
+        for _, thisCard := range g.Players[user].Hand.Cards {
+          if thisCard.GameID != card.GameID {
+            selectableCards = append(selectableCards, thisCard.GameID)
+          }
+        }
+        return UpdateInfo{
+          Movements: movements,
+          Phase: PHASE_SELECTING_CARDS,
+          Pile: HAND_PILE,
+          OpenViewCards: make([]uint, 0),
+          MyTurn: true,
+          SelectableCards: selectableCards,
+        }, nil
+      } else {
+        selectableCards := make([]uint, 0, len(g.Players[user].Hand.Cards))
+        for _, thisCard := range g.Players[user].Hand.Cards {
+          selectableCards = append(selectableCards, thisCard.GameID)
+        }
+        return UpdateInfo{
+          Movements: append(make([]CardMovement, 0, 1), CardMovement{
+            From: HAND_PILE,
+            To: DISCARD_PILE,
+            CardID: action.SelectedCards[0],
+          }),
+          Phase: PHASE_MY_TURN,
+          Pile: HAND_PILE,
+          OpenViewCards: make([]uint, 0),
+          MyTurn: true,
+          SelectableCards: selectableCards,
+        }, nil
+      }
+    }
+  } else if ActionType(action.ActionType) == ActionTypeFinishSelection {
+    movements := make([]CardMovement, 0, len(action.SelectedCards))
+    for _, el := range action.SelectedCards {
+      movements = append(movements, CardMovement{
+        From: HAND_PILE,
+        To: DISCARD_PILE,
+        CardID: el,
+      })
+    }
+    selectableCards := make([]uint, 0, len(g.Players[user].Hand.Cards))
+    for _, thisCard := range g.Players[user].Hand.Cards {
+      selectableCards = append(selectableCards, thisCard.GameID)
+    }
+    return UpdateInfo{
+      Movements: movements,
+      Phase: PHASE_MY_TURN,
+      Pile: HAND_PILE,
+      OpenViewCards: make([]uint, 0),
+      MyTurn: true,
+      SelectableCards: selectableCards,
+    }, nil
+  }
+
+  return UpdateInfo{}, fmt.Errorf("Not sure how to handle action")
+  //return UpdateInfo{
+    //Movements: make([]CardMovement, 0),
+    //Phase: 0,
+    //Pile: HAND_PILE,
+    //OpenViewCards: make([]uint, 0),
+    //MyTurn: true,
+  //}, nil
 }
 
 func MakeGame() *Game {

@@ -116,7 +116,7 @@ func (r *Room) readSetupParams(user *User) (*Message[SetupContent], error) {
 	var params Message[SetupContent] 
 	if err := json.Unmarshal(p, &params); err != nil {
 		return nil, fmt.Errorf("error parsing JSON: %s", err)
-	} else if (params.MessageType != MessageTypeSetup) {
+	} else if (params.MessageType != gamemanager.MessageTypeSetup) {
 		return nil, fmt.Errorf("error setting up, message type is %s", params.MessageType)
 	}
 
@@ -148,21 +148,31 @@ func (r *Room) readForActions(ws *websocket.Conn) (gamemanager.Action, error) {
 	log.Printf("Message: %s", string(p))
 
   // unmarshal into gameaction
-  var action gamemanager.Action;
+  var action Message[gamemanager.Action];
   err = json.Unmarshal(p, &action)
   if err != nil {
     return gamemanager.Action{}, fmt.Errorf("Error Getting Game Action from Message")
   }
 
-	if err := ws.WriteJSON(action); err != nil {
-		return gamemanager.Action{}, fmt.Errorf("Error writing message %s", err)
-	}
-
-	return action, nil
+	return action.Content, nil
 }
 
-func (r *Room) processAction(user *User, action *gamemanager.Action) {
-	r.Game.ProcessAction(r.PlayerToGamePlayerID[user], action)
+func (r *Room) sendUpdateInfo(user *User, info *gamemanager.UpdateInfo) error {
+  err := user.Conn.WriteJSON(
+    Message[gamemanager.UpdateInfo]{
+      Timestamp: timestamp(), 
+      Content: *info, 
+      MessageType: gamemanager.MessageTypeGameplay,
+    },
+  );
+  if err != nil {
+    return fmt.Errorf("Error writing message %s", err)
+  }
+  return nil
+}
+
+func (r *Room) processAction(user *User, action *gamemanager.Action) (gamemanager.UpdateInfo, error) {
+	return r.Game.ProcessAction(r.PlayerToGamePlayerID[user], action)
 }
 
 func (r *Room) spectatorLoop(user *User) {
@@ -195,14 +205,14 @@ func (r *Room) askTurnOrder() (bool, error) {
 		Content: StartGameContent {
 			IsChoosingTurnOrder: true,
 		},
-		MessageType: MessageTypeHeadsOrTails,
+		MessageType: gamemanager.MessageTypeHeadsOrTails,
 		Timestamp: timestamp(),
 	})
 	userWaiting.Conn.WriteJSON(Message[StartGameContent]{
 		Content: StartGameContent {
 			IsChoosingTurnOrder: false,
 		},
-		MessageType: MessageTypeFirstOrSecond,
+		MessageType: gamemanager.MessageTypeFirstOrSecond,
 		Timestamp: timestamp(),
 	})
 
@@ -218,7 +228,7 @@ func (r *Room) askTurnOrder() (bool, error) {
 		return false, fmt.Errorf("error asking turn order: %s", err.Error())
 	}
 
-	if decisionResponse.MessageType != MessageTypeFirstOrSecondChoice {
+	if decisionResponse.MessageType != gamemanager.MessageTypeFirstOrSecondChoice {
 		return false, errors.New(
 			"client response was expected to be a first or second choice, but was instead " + 
 			string(decisionResponse.MessageType),
@@ -239,7 +249,7 @@ func (r *Room) headsOrTails(user *User) error {
 			Content: CoinFlipContent {
 				IsChoosingFlip: true,
 			},
-			MessageType: MessageTypeHeadsOrTails,
+			MessageType: gamemanager.MessageTypeHeadsOrTails,
 			Timestamp: timestamp(),
 		}
 		err := user.Conn.WriteJSON(update)
@@ -258,7 +268,7 @@ func (r *Room) headsOrTails(user *User) error {
 			return errors.New("failed to decode JSON")
 		}
 
-		if decisionResponse.MessageType != MessageTypeCoinChoice {
+		if decisionResponse.MessageType != gamemanager.MessageTypeCoinChoice {
 			return errors.New(
 				"client response was expected to be a coin choice, but was instead " + 
 				string(decisionResponse.MessageType),
@@ -280,7 +290,7 @@ func (r *Room) headsOrTails(user *User) error {
 			Content: CoinFlipContent {
 				IsChoosingFlip: false,
 			},
-			MessageType: MessageTypeHeadsOrTails,
+			MessageType: gamemanager.MessageTypeHeadsOrTails,
 			Timestamp: timestamp(),
 		}
 		user.Conn.WriteJSON(update)
@@ -294,26 +304,37 @@ func (r *Room) headsOrTails(user *User) error {
 func (r *Room) sendInitialGameState(goingFirst bool) {
 	p1Moves, p2Moves := r.Game.StartGame()
 
-	r.ReadyPlayers[0].Conn.WriteJSON(Message[UpdateInfo]{
-		Content: UpdateInfo{
+
+  selectableCards := make([]uint, 0, len(r.Game.Players[0].Hand.Cards))
+  for _, thisCard := range r.Game.Players[0].Hand.Cards {
+    selectableCards = append(selectableCards, thisCard.GameID)
+  }
+	r.ReadyPlayers[0].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
+		Content: gamemanager.UpdateInfo{
 			Movements: *p1Moves,
 			Phase: 0,
-			Pile: gamemanager.NO_PILE,
+			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
 			MyTurn: goingFirst,
+      SelectableCards: selectableCards,
 		},
-		MessageType: MessageTypeGameplay,
+		MessageType: gamemanager.MessageTypeGameplay,
 		Timestamp: timestamp(),
 	})
-	r.ReadyPlayers[1].Conn.WriteJSON(Message[UpdateInfo]{
-		Content: UpdateInfo{
+  selectableCards = make([]uint, 0, len(r.Game.Players[1].Hand.Cards))
+  for _, thisCard := range r.Game.Players[1].Hand.Cards {
+    selectableCards = append(selectableCards, thisCard.GameID)
+  }
+	r.ReadyPlayers[1].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
+		Content: gamemanager.UpdateInfo{
 			Movements: *p2Moves,
 			Phase: 0,
-			Pile: gamemanager.NO_PILE,
+			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
 			MyTurn: !goingFirst,
+      SelectableCards: selectableCards,
 		},
-		MessageType: MessageTypeGameplay,
+		MessageType: gamemanager.MessageTypeGameplay,
 		Timestamp: timestamp(),
 	})
 }
@@ -363,7 +384,17 @@ func (r *Room) playerLoop(user *User) {
 			break
 		}
 
-		r.processAction(user, &action)
+    info, err := r.processAction(user, &action)
+    if err != nil {
+			log.Println("Error processing game action: ", err)
+			break
+    }
+
+    err = r.sendUpdateInfo(user, &info)
+    if err != nil {
+			log.Println("Stopped sending to user, endcode: ", err)
+			break
+    }
 	}
 }
 
