@@ -17,6 +17,10 @@ type Message[T any] struct {
 type SetupContent struct {
   Deck []uint `json:"deck"`
 }
+type SetupResponse struct {
+  MyDeck  []uint `json:"myDeck"`
+  OppDeck []uint `json:"oppDeck"`
+}
 type CoinFlipContent struct {
   IsChoosingFlip bool `json:"isChoosingFlip"`
 }

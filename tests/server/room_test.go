@@ -30,9 +30,6 @@ func TestMakeRoom(t *testing.T) {
 		t.Error("Room readyPlayers slice is nil")
 	}
 	
-	if room.AwaitingAllReady == nil {
-		t.Error("Room awaitingAllReady channel is nil")
-	}
 }
 
 func TestRoomGetPlayersInRoom(t *testing.T) {
@@ -101,31 +98,6 @@ func TestRoomInitPlayer(t *testing.T) {
 	
 	if err == nil {
 		t.Error("Expected error when adding third player, got nil")
-	}
-}
-
-func TestRoomCheckAllReady(t *testing.T) {
-	room := server.MakeRoom(1)
-	
-	// Test empty room
-	if room.CheckAllReady() {
-		t.Error("Empty room should not be ready")
-	}
-	
-	// Add one player
-	user1 := &server.User{IsSpectator: false}
-	room.InitPlayer(user1)
-	
-	if room.CheckAllReady() {
-		t.Error("Room with one player should not be ready")
-	}
-	
-	// Add second player
-	user2 := &server.User{IsSpectator: false}
-	room.InitPlayer(user2)
-	
-	if !room.CheckAllReady() {
-		t.Error("Room with two players should be ready")
 	}
 }
 

@@ -17,6 +17,8 @@ const (
   OPP_RESERVE_PILE      = Pile(8)
   OPP_SPECIALS_PILE     = Pile(9)
   OPP_BATTLEFIELD_PILE  = Pile(10)
+  OPP_DISCARD_PILE      = Pile(11)
+  OPP_DECK_PILE         = Pile(12)
 )
 
 type MessageType uint 

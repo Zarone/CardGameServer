@@ -36,20 +36,30 @@ func (g *Game) AddPlayer() uint8 {
 
 // Sets up player with the given playerID with the deck given by 
 // an array of the card IDs.
-func (g *Game) SetupPlayer(playerID uint8, deck []uint) *[]uint {
+func (g *Game) SetupPlayer(playerID uint8, deck []uint) {
 	var player *Player = &g.Players[playerID]
 	player.Deck.Cards = make([]Card, 0, len(deck))
-	gameIdList := make([]uint, 0, len(deck))
 	for _, el := range deck {
 		player.Deck.Cards = append(player.Deck.Cards, Card{
 			ID: el,
 			GameID: g.CardIndex,
 		})
-		gameIdList = append(gameIdList, g.CardIndex)
 		g.CardIndex++
 	}
+}
 
-	return &gameIdList
+func (g *Game) GetSetupData(playerID uint8) (*[]uint, *[]uint) {
+  myDeck := make([]uint, 0, len(g.Players[playerID].Deck.Cards))
+	for _, el := range g.Players[playerID].Deck.Cards {
+    myDeck = append(myDeck, el.GameID)
+	}
+
+  oppDeck := make([]uint, 0, len(g.Players[1-playerID].Deck.Cards))
+	for _, el := range g.Players[1-playerID].Deck.Cards {
+    oppDeck = append(oppDeck, el.GameID)
+	}
+
+	return &myDeck, &oppDeck
 }
 
 func (g *Game) String() string {
@@ -93,7 +103,8 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
         movements = append(movements, CardMovement{
           From: HAND_PILE,
           To: DISCARD_PILE,
-          CardID: card.GameID,
+          GameID: card.GameID,
+          CardID: card.ID,
         })
         selectableCards := make([]uint, 0, len(g.Players[user].Hand.Cards)-1)
         for _, thisCard := range g.Players[user].Hand.Cards {
@@ -118,7 +129,8 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
           Movements: append(make([]CardMovement, 0, 1), CardMovement{
             From: HAND_PILE,
             To: DISCARD_PILE,
-            CardID: action.SelectedCards[0],
+            GameID: action.SelectedCards[0],
+            CardID: card.ID,
           }),
           Phase: PHASE_MY_TURN,
           Pile: HAND_PILE,
@@ -134,7 +146,8 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
       movements = append(movements, CardMovement{
         From: HAND_PILE,
         To: DISCARD_PILE,
-        CardID: el,
+        GameID: el,
+        CardID: g.Players[user].Hand.find(el).ID, 
       })
     }
     selectableCards := make([]uint, 0, len(g.Players[user].Hand.Cards))

@@ -50,37 +50,6 @@ func TestGameAddPlayer(t *testing.T) {
 	}
 }
 
-func TestGameSetupPlayer(t *testing.T) {
-	game := gamemanager.MakeGame()
-	playerID := game.AddPlayer()
-	
-	// Test setting up player with empty deck
-	deck := []uint{}
-	gameIDs := game.SetupPlayer(playerID, deck)
-	
-	if gameIDs == nil {
-		t.Error("SetupPlayer returned nil")
-		return
-	}
-	
-	if len(*gameIDs) != 0 {
-		t.Errorf("Expected empty game IDs slice, got length %d", len(*gameIDs))
-	}
-	
-	// Test setting up player with some cards
-	deck = []uint{1, 2, 3, 4, 5}
-	gameIDs = game.SetupPlayer(playerID, deck)
-	
-	if gameIDs == nil {
-		t.Error("SetupPlayer returned nil")
-		return
-	}
-	
-	if len(*gameIDs) != len(deck) {
-		t.Errorf("Expected %d game IDs, got %d", len(deck), len(*gameIDs))
-	}
-}
-
 func TestGameStartGame(t *testing.T) {
 	game := gamemanager.MakeGame()
 	

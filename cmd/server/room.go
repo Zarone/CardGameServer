@@ -27,16 +27,52 @@ const (
 
 const PlayersToStartGame uint8 = 2
 
+type Barrier struct {
+	mu            sync.Mutex
+	cond          *sync.Cond
+	count         int
+	expectedCount int
+	phase         int
+}
+
+func NewBarrier(expectedCount int) *Barrier {
+	b := &Barrier{
+		expectedCount: expectedCount,
+	}
+	b.cond = sync.NewCond(&b.mu)
+	return b
+}
+
+func (b *Barrier) Wait() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	phase := b.phase
+	b.count++
+	
+	if b.count == b.expectedCount {
+		// Last thread to arrive
+		b.count = 0
+		b.phase++
+		b.cond.Broadcast()
+	} else {
+		// Wait until all threads arrive and phase changes
+		for phase == b.phase {
+			b.cond.Wait()
+		}
+	}
+}
+
 type Room struct {
-	Connections           map[*User]bool
-	PlayerToGamePlayerID  map[*User]uint8
-	Game                  *gamemanager.Game
-	ReadyPlayersMutex     sync.Mutex
-	ReadyPlayers          []*User
-	AwaitingAllReady      chan bool
-	ExpectingCoinFlip     CoinFlip
-	RoomNumber            uint8
-	RoomDescription       string
+	Connections             map[*User]bool
+	PlayerToGamePlayerID    map[*User]uint8
+	Game                    *gamemanager.Game
+	ReadyPlayersMutex       sync.Mutex
+	ReadyPlayers            []*User
+	barrier                 *Barrier
+	ExpectingCoinFlip       CoinFlip
+	RoomNumber              uint8
+	RoomDescription         string
 }
 
 // GetPlayersInRoom returns the number of players in the room,
@@ -66,17 +102,6 @@ func (r *Room) InitPlayer(user *User) error {
 	return nil
 }
 
-func (r *Room) SetAllReady() {
-	for i := 0; i < int(PlayersToStartGame); i++ {
-		r.AwaitingAllReady <- true
-	}
-}
-
-// CheckAllReady returns true if all players are ready.
-func (r *Room) CheckAllReady() bool {
-	return len(r.ReadyPlayers) == int(PlayersToStartGame)
-}
-
 func (r *Room) String() string {
 	str := ""
 	for user, isPresent := range r.Connections {
@@ -88,8 +113,20 @@ func (r *Room) String() string {
 // Sends the deck list to the game state manager to 
 // set it up. Returns the gameID list in the same
 // order as the cardID list
-func (r *Room) initGameData(u *User, deck []uint) *[]uint {
-	return r.Game.SetupPlayer(r.PlayerToGamePlayerID[u], deck)
+func (r *Room) initGameData(u *User, deck []uint) {
+  r.Game.SetupPlayer(r.PlayerToGamePlayerID[u], deck)
+}
+
+func (r *Room) getInitData(u *User) Message[SetupResponse] {
+  myDeck, oppDeck := r.Game.GetSetupData(r.PlayerToGamePlayerID[u])
+	return Message[SetupResponse]{
+    Content: SetupResponse{
+      MyDeck: *myDeck,
+      OppDeck: *oppDeck,
+    },
+    MessageType: gamemanager.MessageTypeSetup,
+    Timestamp: timestamp(),
+  }
 }
 
 // Takes info from client regarding their deck list 
@@ -100,12 +137,7 @@ func (r *Room) readSetupParams(user *User) (*Message[SetupContent], error) {
 	// if this is the last player to join
 	// then tell the other players the game
 	// is ready to setup
-	defer func(){ 
-		if r.CheckAllReady() {
-			r.SetAllReady()
-			r.RoomDescription = "All players had parameters read..." 
-		}
-	}()
+	defer r.wait("All players had parameters read...")
 
 	// read in a message
 	_, p, err := user.Conn.ReadMessage()
@@ -280,10 +312,7 @@ func (r *Room) headsOrTails(user *User) error {
 		} else {
 			r.ExpectingCoinFlip = CoinFlipTail
 		}
-
-		r.SetAllReady()
-		r.RoomDescription = "Heads/Tails Chosen..."
-
+    fmt.Println("Set coin flip")
 	} else if (r.PlayerToGamePlayerID[user] == 1) {
 		// this player waits
 		var update Message[CoinFlipContent] = Message[CoinFlipContent]{
@@ -301,9 +330,44 @@ func (r *Room) headsOrTails(user *User) error {
 	return nil
 }
 
+func toOpp(pile gamemanager.Pile) gamemanager.Pile {
+  if pile == gamemanager.HAND_PILE {
+    return gamemanager.OPP_HAND_PILE
+  } else if pile == gamemanager.RESERVE_PILE {
+    return gamemanager.OPP_RESERVE_PILE
+  } else if pile == gamemanager.SPECIAL_PILE {
+    return gamemanager.OPP_SPECIALS_PILE
+  } else if pile == gamemanager.BATTLEFIELD_PILE {
+    return gamemanager.OPP_BATTLEFIELD_PILE
+  } else if pile == gamemanager.DISCARD_PILE {
+    return gamemanager.OPP_DISCARD_PILE
+  } else if pile == gamemanager.DECK_PILE {
+    return gamemanager.OPP_DECK_PILE
+  } else {
+    fmt.Println("Not sure what opponent's version of this pile is", pile)
+    return pile
+  }
+}
+
+// Takes moves of player and opponent and returns a merged cardMovement slice to send to player
+func mergeMoves(thisPlayerMoves *[]gamemanager.CardMovement, oppPlayerMoves *[]gamemanager.CardMovement) *[]gamemanager.CardMovement {
+  ret := make([]gamemanager.CardMovement, 0, len(*thisPlayerMoves)+len(*oppPlayerMoves))
+  for _, movement := range *thisPlayerMoves {
+    ret = append(ret, movement)
+  }
+  for _, movement := range *oppPlayerMoves{
+    ret = append(ret, gamemanager.CardMovement{
+      From: toOpp(movement.From),
+      To: toOpp(movement.To),
+      GameID: movement.GameID,
+      CardID: movement.CardID,
+    })
+  }
+  return &ret
+}
+
 func (r *Room) sendInitialGameState(goingFirst bool) {
 	p1Moves, p2Moves := r.Game.StartGame()
-
 
   selectableCards := make([]uint, 0, len(r.Game.Players[0].Hand.Cards))
   for _, thisCard := range r.Game.Players[0].Hand.Cards {
@@ -311,7 +375,7 @@ func (r *Room) sendInitialGameState(goingFirst bool) {
   }
 	r.ReadyPlayers[0].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
 		Content: gamemanager.UpdateInfo{
-			Movements: *p1Moves,
+			Movements: *mergeMoves(p1Moves, p2Moves),
 			Phase: 0,
 			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
@@ -327,7 +391,7 @@ func (r *Room) sendInitialGameState(goingFirst bool) {
   }
 	r.ReadyPlayers[1].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
 		Content: gamemanager.UpdateInfo{
-			Movements: *p2Moves,
+			Movements: *mergeMoves(p2Moves, p1Moves),
 			Phase: 0,
 			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
@@ -342,24 +406,23 @@ func (r *Room) sendInitialGameState(goingFirst bool) {
 func (r *Room) startGame(user *User) error {
 	r.headsOrTails(user)
 
-	// wait until player 1 chosen heads or tails
-	r.wait()
+	r.wait("Heads/Tails Chosen...")
 
 	if (r.ExpectingCoinFlip == CoinFlipUnset) {
-		return errors.New("coin Flip isn't set by evaluation time")
+		return errors.New("coin flip isn't set by evaluation time")
 	}
 	
 	// arbitrarily let player 1 execute the following below,
 	// or rather let the server call initiated by player 1 
 	// execute the below code
 	if r.PlayerToGamePlayerID[user] != 0 { 
-		r.wait()
+		r.wait("Initial Game State Sent to Clients...")
 		return nil
 	} else {
 		// you have to do this so that at the end of the function
 		// wait is always called. This makes sure the r.AwaitingAllReady
 		// channel is reset.
-		defer r.wait()
+		defer r.wait("Initial Game State Sent to Clients...")
 	}
 
 	goingFirst, err := r.askTurnOrder()
@@ -368,9 +431,6 @@ func (r *Room) startGame(user *User) error {
 	}
 
 	r.sendInitialGameState(goingFirst)
-
-	r.SetAllReady()
-	r.RoomDescription = "Initial Game State Sent to Clients..."
 
 	return nil
 }
@@ -395,22 +455,42 @@ func (r *Room) playerLoop(user *User) {
 			log.Println("Stopped sending to user, endcode: ", err)
 			break
     }
+
+    id := r.PlayerToGamePlayerID[user]
+    empty := (make([]gamemanager.CardMovement, 0))
+    err = r.sendUpdateInfo(r.ReadyPlayers[1-id], &gamemanager.UpdateInfo{
+      Movements: *mergeMoves(&empty, &info.Movements),
+      Phase: gamemanager.PHASE_OPPONENTS_TURN,
+      Pile: gamemanager.HAND_PILE,
+      OpenViewCards: make([]uint, 0),
+      MyTurn: false,
+      SelectableCards: make([]uint, 0),
+    })
+    if err != nil {
+			log.Println("Stopped sending to user, endcode: ", err)
+			break
+    }
+
 	}
 }
 
-func (r *Room) wait() {
-	<- r.AwaitingAllReady
+func (r *Room) wait(newDescription string) {
+	fmt.Println("starting wait for:", newDescription)
+	r.barrier.Wait()
+	r.RoomDescription = newDescription
+	fmt.Println("End wait for:", newDescription)
 }
 
 func MakeRoom(roomNumber uint8) *Room {
-	return &Room{
+	ret := &Room{
 		PlayerToGamePlayerID: make(map[*User]uint8),
 		Connections: make(map[*User]bool),
 		Game: gamemanager.MakeGame(),
 		ReadyPlayers: make([]*User, 0),
-		AwaitingAllReady: make(chan bool, PlayersToStartGame),
 		ExpectingCoinFlip: CoinFlipUnset,
 		RoomNumber: roomNumber,
 		RoomDescription: "Just Created...",
+		barrier: NewBarrier(int(PlayersToStartGame)),
 	}
+	return ret
 }
