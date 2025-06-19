@@ -25,6 +25,15 @@ const (
 	CoinFlipTail  = CoinFlip(2)
 )
 
+type RoomDescription string
+const (
+  DESC_FINISHED_INITIALIZATION  = RoomDescription("Finished Initialization...")
+  DESC_PARAMETERS_READ          = RoomDescription("All players had parameters read...")
+  DESC_HEADS_OR_TAILS_CHOSEN    = RoomDescription("Heads/Tails Chosen...")
+  DESC_INITIAL_STATE_TO_CLIENT  = RoomDescription("Initial Game State Sent to Clients...")
+	DESC_JUST_CREATED							= RoomDescription("Just Created...")
+)
+
 const PlayersToStartGame uint8 = 2
 
 type Barrier struct {
@@ -72,7 +81,7 @@ type Room struct {
 	barrier                 *Barrier
 	ExpectingCoinFlip       CoinFlip
 	RoomNumber              uint8
-	RoomDescription         string
+	RoomDescription         RoomDescription
 }
 
 // GetPlayersInRoom returns the number of players in the room,
@@ -137,29 +146,28 @@ func (r *Room) readSetupParams(user *User) (*Message[SetupContent], error) {
 	// if this is the last player to join
 	// then tell the other players the game
 	// is ready to setup
-	defer r.wait("All players had parameters read...")
+	defer r.wait(DESC_PARAMETERS_READ)
 
 	// read in a message
 	_, p, err := user.Conn.ReadMessage()
 	if err != nil {
 		return nil, fmt.Errorf("error Reading Message {%s}", err)
 	}
-
+	
 	var params Message[SetupContent] 
 	if err := json.Unmarshal(p, &params); err != nil {
 		return nil, fmt.Errorf("error parsing JSON: %s", err)
 	} else if (params.MessageType != gamemanager.MessageTypeSetup) {
-		return nil, fmt.Errorf("error setting up, message type is %s", params.MessageType)
+		return nil, fmt.Errorf("error setting up, message type is %v", params.MessageType)
 	}
 
 	return &params, nil
 }
 
 // Attempts to remove connection to the room specified by the request
-func (r *Room) RemoveFromRoom(user *User) {
+func (r *Room) RemoveFromRoom(user *User) error {
 	if len(r.Connections) == 0 {
-		log.Println("Error removing from room")
-		return
+		return errors.New("Error removing from room")
 	}
 
 	if (!user.IsSpectator) {
@@ -167,6 +175,7 @@ func (r *Room) RemoveFromRoom(user *User) {
 	}
 
 	r.Connections[user] = false
+  return nil
 }
 
 func (r *Room) readForActions(ws *websocket.Conn) (gamemanager.Action, error) {
@@ -286,13 +295,13 @@ func (r *Room) headsOrTails(user *User) error {
 		}
 		err := user.Conn.WriteJSON(update)
 		if err != nil {
-			return errors.New("failed to WriteJSON for update")
+			return fmt.Errorf("failed to WriteJSON for update: %s", err.Error())
 		}
 		var decisionResponse Message[CoinFlipContentChoice]
 
 		_, p, err := user.Conn.ReadMessage()
 		if err != nil {
-			return errors.New("failed to ReadJSON for CoinFlipContentChoice")
+			return fmt.Errorf("failed to ReadJSON for CoinFlipContentChoice: %s", err.Error())
 		}
 
 		err = json.Unmarshal(p, &decisionResponse)
@@ -301,9 +310,9 @@ func (r *Room) headsOrTails(user *User) error {
 		}
 
 		if decisionResponse.MessageType != gamemanager.MessageTypeCoinChoice {
-			return errors.New(
-				"client response was expected to be a coin choice, but was instead " + 
-				string(decisionResponse.MessageType),
+			return fmt.Errorf(
+				"client response was expected to be a coin choice, but was instead %v", 
+				decisionResponse.MessageType,
 			)
 		}
 
@@ -404,9 +413,12 @@ func (r *Room) sendInitialGameState(goingFirst bool) {
 }
 
 func (r *Room) startGame(user *User) error {
-	r.headsOrTails(user)
+	err := r.headsOrTails(user)
+	if err != nil {
+		return fmt.Errorf("error with heads or tails: %s", err.Error())
+	}
 
-	r.wait("Heads/Tails Chosen...")
+	r.wait(DESC_HEADS_OR_TAILS_CHOSEN)
 
 	if (r.ExpectingCoinFlip == CoinFlipUnset) {
 		return errors.New("coin flip isn't set by evaluation time")
@@ -416,14 +428,10 @@ func (r *Room) startGame(user *User) error {
 	// or rather let the server call initiated by player 1 
 	// execute the below code
 	if r.PlayerToGamePlayerID[user] != 0 { 
-		r.wait("Initial Game State Sent to Clients...")
+		r.wait(DESC_INITIAL_STATE_TO_CLIENT)
 		return nil
-	} else {
-		// you have to do this so that at the end of the function
-		// wait is always called. This makes sure the r.AwaitingAllReady
-		// channel is reset.
-		defer r.wait("Initial Game State Sent to Clients...")
-	}
+	} 
+
 
 	goingFirst, err := r.askTurnOrder()
 	if err != nil {
@@ -431,6 +439,8 @@ func (r *Room) startGame(user *User) error {
 	}
 
 	r.sendInitialGameState(goingFirst)
+
+	r.wait(DESC_INITIAL_STATE_TO_CLIENT)
 
 	return nil
 }
@@ -474,7 +484,7 @@ func (r *Room) playerLoop(user *User) {
 	}
 }
 
-func (r *Room) wait(newDescription string) {
+func (r *Room) wait(newDescription RoomDescription) {
 	fmt.Println("starting wait for:", newDescription)
 	r.barrier.Wait()
 	r.RoomDescription = newDescription
@@ -489,7 +499,7 @@ func MakeRoom(roomNumber uint8) *Room {
 		ReadyPlayers: make([]*User, 0),
 		ExpectingCoinFlip: CoinFlipUnset,
 		RoomNumber: roomNumber,
-		RoomDescription: "Just Created...",
+		RoomDescription: DESC_JUST_CREATED,
 		barrier: NewBarrier(int(PlayersToStartGame)),
 	}
 	return ret

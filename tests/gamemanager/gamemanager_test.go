@@ -1,6 +1,7 @@
 package gamemanager_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Zarone/CardGameServer/cmd/gamemanager"
@@ -102,18 +103,19 @@ func TestGameStartGame(t *testing.T) {
 	}
 
 	// Verify that moves accurately reflect the cards in hand
-	moveCardIDs := make(map[uint]bool)
+	moveGameIDs := make(map[uint]bool)
 	for _, move := range *p1Moves {
-		moveCardIDs[move.CardID] = true
+		moveGameIDs[move.GameID] = true
 	}
 
 	for _, card := range player1.Hand.Cards {
-		if !moveCardIDs[card.GameID] {
+		fmt.Println(card, "in hand")
+		if !moveGameIDs[card.GameID] {
 			t.Errorf("Card with GameID %d in hand but not listed in moves", card.GameID)
 		}
 	}
 
-	for cardID := range moveCardIDs {
+	for cardID := range moveGameIDs {
 		found := false
 		for _, card := range player1.Hand.Cards {
 			if card.GameID == cardID {
@@ -162,10 +164,10 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 	// Check for duplicates in hand
 	seen := make(map[uint]bool)
 	for _, move := range *p1Moves {
-		if seen[move.CardID] {
-			t.Errorf("Duplicate card ID %d found in hand", move.CardID)
+		if seen[move.GameID] {
+			t.Errorf("Duplicate card ID %d found in hand", move.GameID)
 		}
-		seen[move.CardID] = true
+		seen[move.GameID] = true
 	}
 
 	// Verify that cards in hand are not in deck
@@ -180,27 +182,27 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 	}
 
 	// Verify that moves accurately reflect the cards in hand
-	moveCardIDs := make(map[uint]bool)
+	moveGameIDs := make(map[uint]bool)
 	for _, move := range *p1Moves {
-		moveCardIDs[move.CardID] = true
+		moveGameIDs[move.GameID] = true
 	}
 
 	for _, card := range player1.Hand.Cards {
-		if !moveCardIDs[card.GameID] {
+		if !moveGameIDs[card.GameID] {
 			t.Errorf("Card with GameID %d in hand but not listed in moves", card.GameID)
 		}
 	}
 
-	for cardID := range moveCardIDs {
+	for gameID := range moveGameIDs {
 		found := false
 		for _, card := range player1.Hand.Cards {
-			if card.GameID == cardID {
+			if card.GameID == gameID {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Move lists card ID %d but card not found in hand", cardID)
+			t.Errorf("Move lists card ID %d but card not found in hand", gameID)
 		}
 	}
 

@@ -14,6 +14,14 @@ type Server struct {
 	settings ServerSettings
 }
 
+// Makes a new server
+func MakeServer(settings *ServerSettings) *Server {
+	return &Server{
+		Rooms: make(map[uint8]*Room),
+		settings: *settings,
+	}
+}
+
 func (s *Server) String() string {
 	str := "[Server: \n" +
 		"    " + s.settings.toString()
@@ -51,8 +59,8 @@ func (s *Server) AddToRoom(req *http.Request, user *User) (*Room, error) {
 	return thisRoom, nil
 }
 
-func (s *Server) RemoveUserFromRoom(user *User, room *Room) {
-	room.RemoveFromRoom(user)
+func (s *Server) RemoveUserFromRoom(user *User, room *Room) error {
+	return room.RemoveFromRoom(user)
 }
 
 func (s *Server) HandleWS(res http.ResponseWriter, req *http.Request) {
@@ -94,12 +102,12 @@ func (s *Server) HandleWS(res http.ResponseWriter, req *http.Request) {
     room.initGameData(&user, params.Content.Deck)
 
 		// Wait for all players to finish initialization
-		room.wait("Finished initialization...")
+		room.wait(DESC_FINISHED_INITIALIZATION)
 
 		var setupResponseMessage Message[SetupResponse] = room.getInitData(&user)
 
 		if err := user.Conn.WriteJSON(setupResponseMessage); err != nil {
-			fmt.Println(errors.New(fmt.Sprintf("Error writing message: %s", err)))
+			fmt.Println(fmt.Errorf("error writing message: %s", err))
 			return 
 		}
 
@@ -166,11 +174,3 @@ func (s *Server) HandleRoomsAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(html))
 }
-
-func MakeServer(settings *ServerSettings) *Server {
-	return &Server{
-		Rooms: make(map[uint8]*Room),
-		settings: *settings,
-	}
-}
-

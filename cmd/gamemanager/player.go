@@ -51,6 +51,7 @@ func (cg *CardGroup) moveFromTopTo(to *CardGroup, numberOfCards uint) *[]CardMov
     for i := range cg.Cards {
       newMovements = append(newMovements, CardMovement{
         GameID: uint(cg.Cards[i].GameID),
+        CardID: uint(cg.Cards[i].ID),
         From: cg.Pile,
         To: to.Pile,
       })
@@ -67,6 +68,7 @@ func (cg *CardGroup) moveFromTopTo(to *CardGroup, numberOfCards uint) *[]CardMov
   for i := range int(numberOfCards) {
     newMovements = append(newMovements, CardMovement{
       GameID: uint(cg.Cards[len(cg.Cards)-i-1].GameID),
+      CardID: uint(cg.Cards[len(cg.Cards)-i-1].ID),
       From: cg.Pile,
       To: to.Pile,
     })
