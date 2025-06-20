@@ -303,33 +303,46 @@ func (r *Room) headsOrTails(user *User) error {
 func (r *Room) sendInitialGameState(goingFirst bool) {
 	p1Moves, p2Moves := r.Game.StartGame()
 
-  selectableCards := make([]uint, 0, len(r.Game.Players[0].Hand.Cards))
-  for _, thisCard := range r.Game.Players[0].Hand.Cards {
-    selectableCards = append(selectableCards, thisCard.GameID)
+  var selectableCards []uint
+  var phase gamemanager.Phase
+  if goingFirst {
+    phase = gamemanager.PHASE_MY_TURN
+    selectableCards = make([]uint, 0, len(r.Game.Players[0].Hand.Cards))
+    for _, thisCard := range r.Game.Players[0].Hand.Cards {
+      selectableCards = append(selectableCards, thisCard.GameID)
+    }
+  } else {
+    phase = gamemanager.PHASE_OPPONENTS_TURN
+    selectableCards = make([]uint, 0)
   }
 	r.ReadyPlayers[0].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
 		Content: gamemanager.UpdateInfo{
 			Movements: *mergeMoves(p1Moves, p2Moves),
-			Phase: 0,
+			Phase: phase,
 			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
-			MyTurn: goingFirst,
       SelectableCards: selectableCards,
 		},
 		MessageType: gamemanager.MessageTypeGameplay,
 		Timestamp: timestamp(),
 	})
-  selectableCards = make([]uint, 0, len(r.Game.Players[1].Hand.Cards))
-  for _, thisCard := range r.Game.Players[1].Hand.Cards {
-    selectableCards = append(selectableCards, thisCard.GameID)
+
+  if goingFirst {
+    phase = gamemanager.PHASE_OPPONENTS_TURN
+    selectableCards = make([]uint, 0)
+  } else {
+    phase = gamemanager.PHASE_MY_TURN
+    selectableCards = make([]uint, 0, len(r.Game.Players[1].Hand.Cards))
+    for _, thisCard := range r.Game.Players[1].Hand.Cards {
+      selectableCards = append(selectableCards, thisCard.GameID)
+    }
   }
 	r.ReadyPlayers[1].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
 		Content: gamemanager.UpdateInfo{
 			Movements: *mergeMoves(p2Moves, p1Moves),
-			Phase: 0,
+			Phase: phase,
 			Pile: gamemanager.HAND_PILE,
 			OpenViewCards: make([]uint, 0),
-			MyTurn: !goingFirst,
       SelectableCards: selectableCards,
 		},
 		MessageType: gamemanager.MessageTypeGameplay,
@@ -398,7 +411,6 @@ func (r *Room) playerLoop(user *User) {
       Phase: gamemanager.PHASE_OPPONENTS_TURN,
       Pile: gamemanager.HAND_PILE,
       OpenViewCards: make([]uint, 0),
-      MyTurn: false,
       SelectableCards: make([]uint, 0),
     })
     if err != nil {

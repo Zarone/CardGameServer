@@ -117,7 +117,6 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
           Phase: PHASE_SELECTING_CARDS,
           Pile: HAND_PILE,
           OpenViewCards: make([]uint, 0),
-          MyTurn: true,
           SelectableCards: selectableCards,
         }, nil
       } else {
@@ -135,7 +134,6 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
           Phase: PHASE_MY_TURN,
           Pile: HAND_PILE,
           OpenViewCards: make([]uint, 0),
-          MyTurn: true,
           SelectableCards: selectableCards,
         }, nil
       }
@@ -159,7 +157,6 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
       Phase: PHASE_MY_TURN,
       Pile: HAND_PILE,
       OpenViewCards: make([]uint, 0),
-      MyTurn: true,
       SelectableCards: selectableCards,
     }, nil
   }
