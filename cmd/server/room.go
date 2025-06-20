@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/Zarone/CardGameServer/cmd/gamemanager"
 	"github.com/gorilla/websocket"
@@ -36,42 +35,6 @@ const (
 
 const PlayersToStartGame uint8 = 2
 
-type Barrier struct {
-	mu            sync.Mutex
-	cond          *sync.Cond
-	count         int
-	expectedCount int
-	phase         int
-}
-
-func NewBarrier(expectedCount int) *Barrier {
-	b := &Barrier{
-		expectedCount: expectedCount,
-	}
-	b.cond = sync.NewCond(&b.mu)
-	return b
-}
-
-func (b *Barrier) Wait() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	phase := b.phase
-	b.count++
-	
-	if b.count == b.expectedCount {
-		// Last thread to arrive
-		b.count = 0
-		b.phase++
-		b.cond.Broadcast()
-	} else {
-		// Wait until all threads arrive and phase changes
-		for phase == b.phase {
-			b.cond.Wait()
-		}
-	}
-}
-
 type Room struct {
 	Connections             map[*User]bool
 	PlayerToGamePlayerID    map[*User]uint8
@@ -99,14 +62,16 @@ func (r *Room) GetPlayersInRoom() uint8 {
 }
 
 func (r *Room) InitPlayer(user *User) error {
+	r.ReadyPlayersMutex.Lock()
+  defer r.ReadyPlayersMutex.Unlock()
+
 	if len(r.ReadyPlayers) >= int(PlayersToStartGame) {
 		return errors.New("too many players")
 	}
 
 	r.PlayerToGamePlayerID[user] = r.Game.AddPlayer() 
-	r.ReadyPlayersMutex.Lock()
 	r.ReadyPlayers = append(r.ReadyPlayers, user)
-	r.ReadyPlayersMutex.Unlock()
+	
 
 	return nil
 }
@@ -270,17 +235,13 @@ func (r *Room) askTurnOrder() (bool, error) {
 	}
 
 	if decisionResponse.MessageType != gamemanager.MessageTypeFirstOrSecondChoice {
-		return false, errors.New(
-			"client response was expected to be a first or second choice, but was instead " + 
-			string(decisionResponse.MessageType),
+		return false, fmt.Errorf(
+			"client response was expected to be a first or second choice, but was instead %d",
+			decisionResponse.MessageType,
 		)
 	}
 	
 	return (userChoosingFlip == r.ReadyPlayers[0]) == decisionResponse.Content.First, nil
-}
-
-func timestamp() string {
-	return fmt.Sprint(time.Now().Format("20060102150405"))
 }
 
 func (r *Room) headsOrTails(user *User) error {
@@ -337,42 +298,6 @@ func (r *Room) headsOrTails(user *User) error {
 	}
 
 	return nil
-}
-
-func toOpp(pile gamemanager.Pile) gamemanager.Pile {
-  if pile == gamemanager.HAND_PILE {
-    return gamemanager.OPP_HAND_PILE
-  } else if pile == gamemanager.RESERVE_PILE {
-    return gamemanager.OPP_RESERVE_PILE
-  } else if pile == gamemanager.SPECIAL_PILE {
-    return gamemanager.OPP_SPECIALS_PILE
-  } else if pile == gamemanager.BATTLEFIELD_PILE {
-    return gamemanager.OPP_BATTLEFIELD_PILE
-  } else if pile == gamemanager.DISCARD_PILE {
-    return gamemanager.OPP_DISCARD_PILE
-  } else if pile == gamemanager.DECK_PILE {
-    return gamemanager.OPP_DECK_PILE
-  } else {
-    fmt.Println("Not sure what opponent's version of this pile is", pile)
-    return pile
-  }
-}
-
-// Takes moves of player and opponent and returns a merged cardMovement slice to send to player
-func mergeMoves(thisPlayerMoves *[]gamemanager.CardMovement, oppPlayerMoves *[]gamemanager.CardMovement) *[]gamemanager.CardMovement {
-  ret := make([]gamemanager.CardMovement, 0, len(*thisPlayerMoves)+len(*oppPlayerMoves))
-  for _, movement := range *thisPlayerMoves {
-    ret = append(ret, movement)
-  }
-  for _, movement := range *oppPlayerMoves{
-    ret = append(ret, gamemanager.CardMovement{
-      From: toOpp(movement.From),
-      To: toOpp(movement.To),
-      GameID: movement.GameID,
-      CardID: movement.CardID,
-    })
-  }
-  return &ret
 }
 
 func (r *Room) sendInitialGameState(goingFirst bool) {

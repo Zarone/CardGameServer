@@ -9,7 +9,7 @@ type Action struct {
 }
 
 func (a *Action) String() string {
-  return fmt.Sprintf("{ActionType: %s, SelectedCards: %s, From: %s}\n", a.ActionType, a.SelectedCards, a.From)
+  return fmt.Sprintf("{ActionType: %v, SelectedCards: %v, From: %v}\n", a.ActionType, a.SelectedCards, a.From)
 }
 
 type Game struct {
@@ -165,13 +165,6 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
   }
 
   return UpdateInfo{}, fmt.Errorf("Not sure how to handle action")
-  //return UpdateInfo{
-    //Movements: make([]CardMovement, 0),
-    //Phase: 0,
-    //Pile: HAND_PILE,
-    //OpenViewCards: make([]uint, 0),
-    //MyTurn: true,
-  //}, nil
 }
 
 func MakeGame() *Game {
