@@ -114,6 +114,56 @@ func TestServerHandleRoomsAPI(t *testing.T) {
 	}
 }
 
+func TestServerJoin(t *testing.T) {
+	for i := range 10 {
+		t.Run(fmt.Sprintf("TestServerJoin, run-%d", i), func(t *testing.T) {
+      settings := &server.ServerSettings{}
+      s := server.MakeServer(settings)
+      ts := httptest.NewServer(http.HandlerFunc(s.HandleWS))
+      defer ts.Close()
+
+      wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?room=1"
+
+      // Connect both players
+      ws := make([]*websocket.Conn, 2)
+      errCh := make(chan error, 2) // one per player
+      var wg sync.WaitGroup
+
+      for j := range 2 {
+        wg.Add(1)
+        go func() {
+          defer wg.Done()
+
+          var err error
+          ws[j], _, err = websocket.DefaultDialer.Dial(wsURL, nil)
+          if err != nil {
+            errCh <- err
+            return
+          }
+          defer ws[j].Close()
+
+          _, p, err := ws[j].ReadMessage()
+          if err != nil || string(p) != "Hi Client!" {
+            errCh <- err
+            return
+          }
+          errCh <- nil
+        }()
+      }
+
+      wg.Wait()
+
+      close(errCh)
+
+      for err := range errCh {
+        if err != nil {
+          t.Fatalf("Error joining: %v", err)
+        }
+      }
+		})
+	}
+}
+
 // --- Generalized Race Condition Test Harness ---
 
 // SetupPhaseAction represents an action a player can take during setup
