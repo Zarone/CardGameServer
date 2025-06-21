@@ -19,6 +19,7 @@ const (
   OPP_BATTLEFIELD_PILE  = Pile(10)
   OPP_DISCARD_PILE      = Pile(11)
   OPP_DECK_PILE         = Pile(12)
+  BEING_PLAYED          = Pile(13)
 )
 
 type MessageType uint 

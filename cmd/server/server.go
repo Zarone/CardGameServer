@@ -7,19 +7,14 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+
+	"github.com/Zarone/CardGameServer/cmd/gamemanager"
 )
 
 type Server struct {
-	Rooms map[uint8]*Room
-	settings ServerSettings
-}
-
-// Makes a new server
-func MakeServer(settings *ServerSettings) *Server {
-	return &Server{
-		Rooms: make(map[uint8]*Room),
-		settings: *settings,
-	}
+	Rooms       map[uint8]*Room
+	settings    ServerSettings
+  cardHandler *gamemanager.CardHandler
 }
 
 func (s *Server) String() string {
@@ -39,7 +34,9 @@ func (s *Server) String() string {
 func (s *Server) AddToRoom(req *http.Request, user *User) (*Room, error) {
 	roomNum := requestToRoomNumber(req)
 
-	if (s.Rooms[roomNum] == nil) { s.Rooms[roomNum] = MakeRoom(roomNum) }
+	if (s.Rooms[roomNum] == nil) { 
+    s.Rooms[roomNum] = MakeRoom(roomNum, s.cardHandler) 
+  }
 
 	thisRoom := s.Rooms[roomNum]
 
@@ -173,4 +170,13 @@ func (s *Server) HandleRoomsAPI(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(html))
+}
+
+// Makes a new server
+func MakeServer(settings *ServerSettings) *Server {
+	return &Server{
+		Rooms: make(map[uint8]*Room),
+		settings: *settings,
+    cardHandler: gamemanager.SetupFromDirectory("./cardInfo"),
+	}
 }

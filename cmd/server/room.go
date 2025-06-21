@@ -428,11 +428,11 @@ func (r *Room) wait(newDescription RoomDescription) {
 	fmt.Println("End wait for:", newDescription)
 }
 
-func MakeRoom(roomNumber uint8) *Room {
+func MakeRoom(roomNumber uint8, cardHandler *gamemanager.CardHandler) *Room {
 	ret := &Room{
 		PlayerToGamePlayerID: make(map[*User]uint8),
 		Connections: make(map[*User]bool),
-		Game: gamemanager.MakeGame(),
+		Game: gamemanager.MakeGame(cardHandler),
 		ReadyPlayers: make([]*User, 0),
 		ExpectingCoinFlip: CoinFlipUnset,
 		RoomNumber: roomNumber,

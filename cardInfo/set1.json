@@ -1,0 +1,62 @@
+[
+  {
+    "name": "card 1",
+    "imageSrc": "card1"
+  },
+  {
+    "name": "card 2",
+    "imageSrc": "card2"
+  },
+  {
+    "name": "card 3",
+    "imageSrc": "card3"
+  },
+  {
+    "name": "card 4",
+    "imageSrc": "card4"
+  },
+  {
+    "name": "card 5",
+    "imageSrc": "card5"
+  },
+  {
+    "name": "Ultra Ball",
+    "imageSrc": "card6",
+    "preCondition": {
+      "kind": "OPERATOR",
+      "operator": ">",
+      "args": [
+        {
+          "kind": "VARIABLE",
+          "variable": "CARDS_IN_HAND"
+        },
+        {
+          "kind": "CONSTANT",
+          "val": 2
+        }
+      ]
+    },
+    "effect": {
+      "kind": "DISCARD",
+      "cardFilter": {
+        "kind": "PILE",
+        "pile": "HAND",
+        "count": {
+          "atLeast": 2,
+          "atMost": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "Decidueye GX",
+    "imageSrc": "card7"
+  },
+  {
+    "imageSrc": "card8",
+    "alias": {
+      "set": "set1",
+      "id": 5
+    }
+  }
+]

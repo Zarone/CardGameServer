@@ -13,8 +13,9 @@ func (a *Action) String() string {
 }
 
 type Game struct {
-	Players    []Player
-	CardIndex  uint
+	Players     []Player
+	CardIndex   uint
+  CardHandler *CardHandler
 }
 
 // returns the index of this player within
@@ -83,7 +84,6 @@ func (g *Game) StartGame() (*[]CardMovement, *[]CardMovement) {
 }
 
 func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
-
   if (ActionType(action.ActionType) == ActionTypeSelectCard) {
     fmt.Printf("Action: Play Card\n")
 
@@ -164,10 +164,11 @@ func (g *Game) ProcessAction(user uint8, action *Action) (UpdateInfo, error) {
   return UpdateInfo{}, fmt.Errorf("Not sure how to handle action")
 }
 
-func MakeGame() *Game {
+func MakeGame(cardHandler *CardHandler) *Game {
 	return &Game{
 		CardIndex: 0,
 		Players: make([]Player, 0, 2),
+    CardHandler: cardHandler,
 	}
 }
 
