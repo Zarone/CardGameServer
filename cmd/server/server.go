@@ -173,10 +173,10 @@ func (s *Server) HandleRoomsAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 // Makes a new server
-func MakeServer(settings *ServerSettings) *Server {
+func MakeServer(settings *ServerSettings, cardInfoPath string) *Server {
 	return &Server{
 		Rooms: make(map[uint8]*Room),
 		settings: *settings,
-    cardHandler: gamemanager.SetupFromDirectory("./cardInfo"),
+    cardHandler: gamemanager.SetupFromDirectory(cardInfoPath),
 	}
 }

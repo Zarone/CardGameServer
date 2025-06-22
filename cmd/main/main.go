@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-  myServer := server.MakeServer(&server.ServerSettings{}) 
+  myServer := server.MakeServer(&server.ServerSettings{}, "./cardInfo") 
 
   // example path: /socket?room=3&spectator=true
   http.HandleFunc("/socket", myServer.HandleWS)

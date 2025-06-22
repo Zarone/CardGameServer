@@ -15,34 +15,80 @@ type Expression struct {
 }
 
 type CardEffect struct {
-  Kind  string  `json:"kind"` // THEN, OR, DRAW, DISCARD
+  Kind  string  `json:"kind"` // THEN, OR, MOVE, SHUFFLE, TARGET
 
   // if Kind="THEN" or KIND="OR"
   Args  []*CardEffect `json:"args,omitempty"`
 
-  // if Kind="DRAW" or KIND="DISCARD"
-  CardFilter  CardFilter  `json:"cardFilter,omitempty"`
+  // if Kind="MOVE"
+  CardTarget *CardEffect `json:"target,omitempty"`
+  To    string  `json:"to,omitempty"`
+
+  // if Kind="TARGET"
+  TargetType string `json:"targetType,omitempty"` // SELECT, ALL, TOP, THIS
+  Filter CardFilter `json:"filter,omitempty"`
 }
 
 type CardFilter struct {
-  // AND, OR, PILE, TYPE, ANY_COMBINATION_OF
+  // AND, OR, JUST
   Kind  string `json:"kind"` 
 
-  // If Kind="AND" or Kind="OR" or Kind="ANY_COMBINATION_OF"
-  Args []*CardFilter  `json:"args,omitempty"`
-
-  // If Kind="PILE"
-  Pile  string  `json:"pile,omitempty"`
-
-  // If Kind="TYPE"
-  Type  string  `json:"type,omitempty"`
-
-  // If Kind="PILE" or Kind="TYPE" or Kind="ANY_COMBINATION_OF"
+  // Always Optional
   Count CountRestriction  `json:"count,omitempty"`
 
+  // If Kind="AND" or Kind="OR"
+  Args []*CardFilter  `json:"args,omitempty"`
+
+  // If Kind="JUST", Optionally Include These
+  Pile  string  `json:"pile,omitempty"`
+  Type  string  `json:"type,omitempty"`
 }
 
 type CountRestriction struct {
   AT_LEAST  int `json:"atLeast,omitempty"`
   AT_MOST   int `json:"atMost,omitempty"`
 }
+
+// example usage of CardEffect & CardTarget & CardFilter: 
+/*
+
+Ultra Ball:
+
+THEN([
+  MOVE(THIS, DISCARD),
+  MOVE(
+    SELECT(JUST(HAND,COUNT(2,2))), 
+    DISCARD
+  ),
+  MOVE(
+    SELECT(JUST(DECK,COUNT(1,1),TYPE(POKEMON))),
+    HAND
+  ),
+  SHUFFLE
+])
+
+
+Super Rod:
+
+THEN([
+  MOVE(
+    SELECT(
+      OR(
+        JUST(TYPE(POKEMON)),
+        JUST(TYPE(ENERGY))
+      ), 
+      COUNT(1,3)
+    ), DECK
+  ),
+  SHUFFLE
+])
+
+
+Professor's Research:
+
+THEN([
+  MOVE(ALL(HAND), DISCARD)
+  MOVE(TOP(JUST(DECK), COUNT(7,7)), HAND)
+])
+
+*/

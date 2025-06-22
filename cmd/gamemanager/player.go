@@ -43,22 +43,23 @@ func (cg *CardGroup) String() string {
 }
 
 // Moves "numberOfCards" the top (the end) of given card group into "to"
-func (cg *CardGroup) moveFromTopTo(to *CardGroup, numberOfCards uint) *[]CardMovement {
- if uint(len(cg.Cards)) < numberOfCards {
+func (p *Player) moveFromTopTo(from *CardGroup, to *CardGroup, numberOfCards uint) *[]CardMovement {
+ if uint(len(from.Cards)) < numberOfCards {
     // Handle the case where there are fewer than requested elements
-    newMovements := make([]CardMovement, 0, len(cg.Cards))
+    newMovements := make([]CardMovement, 0, len(from.Cards))
 
-    for i := range cg.Cards {
+    for i := range from.Cards {
       newMovements = append(newMovements, CardMovement{
-        GameID: uint(cg.Cards[i].GameID),
-        CardID: uint(cg.Cards[i].ID),
-        From: cg.Pile,
+        GameID: uint(from.Cards[i].GameID),
+        CardID: uint(from.Cards[i].ID),
+        From: from.Pile,
         To: to.Pile,
       })
+      p.FindID[from.Cards[i].GameID] = to
     }
 
-    to.Cards = append(to.Cards, (cg.Cards)...)
-    cg.Cards = (cg.Cards)[:0] // clear src
+    to.Cards = append(to.Cards, (from.Cards)...)
+    from.Cards = (from.Cards)[:0] // clear src
   
     return &newMovements
   }
@@ -67,25 +68,45 @@ func (cg *CardGroup) moveFromTopTo(to *CardGroup, numberOfCards uint) *[]CardMov
 
   for i := range int(numberOfCards) {
     newMovements = append(newMovements, CardMovement{
-      GameID: uint(cg.Cards[len(cg.Cards)-i-1].GameID),
-      CardID: uint(cg.Cards[len(cg.Cards)-i-1].ID),
-      From: cg.Pile,
+      GameID: uint(from.Cards[len(from.Cards)-i-1].GameID),
+      CardID: uint(from.Cards[len(from.Cards)-i-1].ID),
+      From: from.Pile,
       To: to.Pile,
     })
+    p.FindID[from.Cards[len(from.Cards)-i-1].GameID] = to
   }
 
-  to.Cards = append(to.Cards, (cg.Cards)[len(cg.Cards)-int(numberOfCards):]...)
-  cg.Cards = (cg.Cards)[:len(cg.Cards)-int(numberOfCards)]
+  to.Cards = append(to.Cards, (from.Cards)[len(from.Cards)-int(numberOfCards):]...)
+  from.Cards = (from.Cards)[:len(from.Cards)-int(numberOfCards)]
 
   return &newMovements
 
 }
 
 type Player struct {
-  Deck CardGroup
-  Hand CardGroup
+  Deck    CardGroup
+  Hand    CardGroup
+  Discard CardGroup
+  FindID  map[uint]*CardGroup
 }
 
 func (p Player) String() string {
   return fmt.Sprintf("deck: %s\nhand: %s\n", p.Deck.String(), p.Hand.String())
+}
+
+func MakePlayer() Player {
+  return Player{
+		Deck: CardGroup{
+			Cards: make([]Card, 0),
+			Pile: DECK_PILE,
+		},
+		Hand: CardGroup{
+			Cards: make([]Card, 0),
+			Pile: HAND_PILE,
+		},
+    Discard: CardGroup{
+      Cards: make([]Card, 0),
+      Pile: DISCARD_PILE,
+    },
+	}
 }

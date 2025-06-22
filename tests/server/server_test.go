@@ -16,7 +16,7 @@ import (
 
 func TestMakeServer(t *testing.T) {
 	settings := &server.ServerSettings{}
-	s := server.MakeServer(settings)
+	s := server.MakeServer(settings, cardInfoPath)
 	
 	if s == nil {
 		t.Error("MakeServer returned nil")
@@ -33,7 +33,7 @@ func TestMakeServer(t *testing.T) {
 
 func TestServerAddToRoom(t *testing.T) {
 	settings := &server.ServerSettings{}
-	s := server.MakeServer(settings)
+	s := server.MakeServer(settings, cardInfoPath)
 	
 	// Create a test request
 	req := httptest.NewRequest("GET", "/ws?room=1", nil)
@@ -69,7 +69,7 @@ func TestServerAddToRoom(t *testing.T) {
 
 func TestServerRemoveUserFromRoom(t *testing.T) {
 	settings := &server.ServerSettings{}
-	s := server.MakeServer(settings)
+	s := server.MakeServer(settings, cardInfoPath)
 	
 	// Create a test request
 	req := httptest.NewRequest("GET", "/ws?room=1", nil)
@@ -88,7 +88,7 @@ func TestServerRemoveUserFromRoom(t *testing.T) {
 }
 func TestServerHandleRoomsAPI(t *testing.T) {
 	settings := &server.ServerSettings{}
-	s := server.MakeServer(settings)
+	s := server.MakeServer(settings, cardInfoPath)
 	
 	// Add some test rooms
 	req1 := httptest.NewRequest("GET", "/ws?room=1", nil)
@@ -118,7 +118,7 @@ func TestServerJoin(t *testing.T) {
 	for i := range 10 {
 		t.Run(fmt.Sprintf("TestServerJoin, run-%d", i), func(t *testing.T) {
       settings := &server.ServerSettings{}
-      s := server.MakeServer(settings)
+      s := server.MakeServer(settings, cardInfoPath)
       ts := httptest.NewServer(http.HandlerFunc(s.HandleWS))
       defer ts.Close()
 
@@ -176,7 +176,7 @@ type SetupPhaseAction struct {
 // SimulateSetupPhase runs a sequence of actions (possibly concurrently) for two clients
 func SimulateSetupPhase(t *testing.T, actions []SetupPhaseAction) (*server.Room, *websocket.Conn, *websocket.Conn) {
 	settings := &server.ServerSettings{}
-	s := server.MakeServer(settings)
+	s := server.MakeServer(settings, cardInfoPath)
 	ts := httptest.NewServer(http.HandlerFunc(s.HandleWS))
 	defer ts.Close()
 

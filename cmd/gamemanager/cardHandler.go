@@ -18,7 +18,7 @@ type StaticCardDataRaw struct {
   ImageSrc      string      `json:"imageSrc"`
   Alias         Alias       `json:"alias,omitempty"`
   PreCondition  Expression  `json:"preCondition,omitempty"`
-  Effect        CardEffect  `json:"effect,omitempty"`
+  Effect        *CardEffect `json:"effect,omitempty"`
 }
 
 func (cd *StaticCardDataRaw) UnmarshalJSON(data []byte) error {
@@ -39,69 +39,96 @@ type StaticCardData struct {
   ImageSrc      string
   Alias         *StaticCardData
   PreCondition  Expression
-  Effect        CardEffect
+  Effect        *CardEffect
 }
 
 type CardHandler struct {
   cardLookup map[string]([]StaticCardData)
 }
 
+func SetupFromString(content string) *CardHandler {
+	cardHandler := &CardHandler{
+		cardLookup: make(map[string][]StaticCardData, 1),
+	}
+	rawLookupTables := make(map[string][]StaticCardDataRaw)
+
+	if err := processSet("set1", []byte(content), cardHandler, rawLookupTables); err != nil {
+		fmt.Printf("Error processing string content: %v\n", err)
+	}
+
+	resolveAliases(cardHandler, rawLookupTables)
+	return cardHandler
+}
+
 func SetupFromDirectory(path string) *CardHandler {
-  entries, err := os.ReadDir(path)
-  if err != nil {
-    log.Fatal(err)
-  }
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  var cardHandler CardHandler = CardHandler{
-    cardLookup: make(map[string][]StaticCardData, len(entries)),
-  }
-  
-  rawLookupTables := make(map[string]([]StaticCardDataRaw))
+	cardHandler := &CardHandler{
+		cardLookup: make(map[string][]StaticCardData, len(entries)),
+	}
+	rawLookupTables := make(map[string][]StaticCardDataRaw)
 
-  // populate raw lookup tables
-  for _, e := range entries {
-    setName := e.Name()
+	for _, e := range entries {
+		fileName := e.Name()
+		text, err := os.ReadFile(path + "/" + fileName)
+		if err != nil {
+			fmt.Printf("Error reading file %s: %v\n", fileName, err)
+			continue
+		}
 
-    text, err := os.ReadFile(path + "/" + setName)
+		setName := strings.Split(fileName, ".")[0]
+		if err := processSet(setName, text, cardHandler, rawLookupTables); err != nil {
+			fmt.Printf("Error processing set from file %s: %v\n", fileName, err)
+		}
+	}
 
-    setName = strings.Split(setName, ".")[0]
+	resolveAliases(cardHandler, rawLookupTables)
+	return cardHandler
+}
 
-    if err != nil {
-      fmt.Println(err)
-    }
-    fmt.Print(string(text))
+// processSet handles unmarshalling and initial processing of a single set.
+func processSet(setName string, content []byte, ch *CardHandler, rawLookups map[string][]StaticCardDataRaw) error {
+	var setLookupTableRaw []StaticCardDataRaw
+	err := json.Unmarshal(content, &setLookupTableRaw)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal set %s: %w", setName, err)
+	}
 
-    var setLookupTableRaw []StaticCardDataRaw
+	rawLookups[setName] = setLookupTableRaw
+	ch.cardLookup[setName] = make([]StaticCardData, 0, len(setLookupTableRaw))
 
-    err = json.Unmarshal(text, &setLookupTableRaw)
-    if err != nil {
-      fmt.Println(err)
-    }
+	for _, element := range setLookupTableRaw {
+		ch.cardLookup[setName] = append(ch.cardLookup[setName], StaticCardData{
+			Name:         element.Name,
+			ImageSrc:     element.ImageSrc,
+			Alias:        nil,
+			PreCondition: element.PreCondition,
+			Effect:       element.Effect,
+		})
+	}
+	return nil
+}
 
-    rawLookupTables[setName] = setLookupTableRaw
+// resolveAliases populates the Alias fields after all cards have been loaded.
+func resolveAliases(ch *CardHandler, rawLookups map[string][]StaticCardDataRaw) {
+	for setName, rawLookupTable := range rawLookups {
+		for index, element := range rawLookupTable {
+			if element.Alias.Set == "" {
+				continue
+			}
+			if _, ok := ch.cardLookup[element.Alias.Set]; !ok {
+				fmt.Println("Loading in card with alias pointing to unknown set", element.Alias.Set)
+				continue
+			}
+			if uint(len(ch.cardLookup[element.Alias.Set])) <= element.Alias.ID {
+				fmt.Println("Loading in card with alias pointing to valid set but unknown id", element.Alias.ID)
+				continue
+			}
 
-    cardHandler.cardLookup[setName] = make([]StaticCardData, 0, len(setLookupTableRaw))
-
-    // generate actual lookup tables from raw lookup tables
-    for _, element := range setLookupTableRaw {
-      cardHandler.cardLookup[setName] = append(cardHandler.cardLookup[setName], StaticCardData{
-        Name: element.Name,
-        ImageSrc: element.ImageSrc,
-        Alias: nil,
-        PreCondition: element.PreCondition,
-        Effect: element.Effect,
-      })
-    }
-  }
-
-  // fill out aliases  
-  for setName, rawLookupTable := range rawLookupTables {
-    for index, element := range rawLookupTable {
-      if element.Alias.Set != "" {
-        cardHandler.cardLookup[setName][index].Alias = &cardHandler.cardLookup[element.Alias.Set][element.Alias.ID]
-      }
-    }
-  }
-
-  return &cardHandler
+			ch.cardLookup[setName][index].Alias = &ch.cardLookup[element.Alias.Set][element.Alias.ID]
+		}
+	}
 }

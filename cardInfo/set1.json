@@ -36,16 +36,30 @@
         }
       ]
     },
-    "effect": {
-      "kind": "DISCARD",
-      "cardFilter": {
-        "kind": "PILE",
-        "pile": "HAND",
-        "count": {
-          "atLeast": 2,
-          "atMost": 2
+    "effect": { 
+      "kind": "THEN", 
+      "args": [
+        {
+          "kind": "MOVE",
+          "target": { "kind": "THIS" },
+          "to": "DISCARD"
+        },
+        {
+          "kind": "MOVE",
+          "target": {
+            "kind": "SELECT",
+            "filter": {
+              "kind": "JUST",
+              "pile": "HAND",
+              "count": {
+                "atLeast": 2,
+                "atMost": 2
+              }
+            }
+          },
+          "to": "DISCARD"
         }
-      }
+      ]
     }
   },
   {

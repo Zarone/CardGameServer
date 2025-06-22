@@ -177,7 +177,7 @@ func (r *Room) sendUpdateInfo(user *User, info *gamemanager.UpdateInfo) error {
   return nil
 }
 
-func (r *Room) processAction(user *User, action *gamemanager.Action) (gamemanager.UpdateInfo, error) {
+func (r *Room) processAction(user *User, action *gamemanager.Action) (*gamemanager.UpdateInfo, *gamemanager.UpdateInfo, error) {
 	return r.Game.ProcessAction(r.PlayerToGamePlayerID[user], action)
 }
 
@@ -301,50 +301,16 @@ func (r *Room) headsOrTails(user *User) error {
 }
 
 func (r *Room) sendInitialGameState(goingFirst bool) {
-	p1Moves, p2Moves := r.Game.StartGame()
+	p1Info, p2Info := r.Game.StartGame(goingFirst)
 
-  var selectableCards []uint
-  var phase gamemanager.Phase
-  if goingFirst {
-    phase = gamemanager.PHASE_MY_TURN
-    selectableCards = make([]uint, 0, len(r.Game.Players[0].Hand.Cards))
-    for _, thisCard := range r.Game.Players[0].Hand.Cards {
-      selectableCards = append(selectableCards, thisCard.GameID)
-    }
-  } else {
-    phase = gamemanager.PHASE_OPPONENTS_TURN
-    selectableCards = make([]uint, 0)
-  }
 	r.ReadyPlayers[0].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
-		Content: gamemanager.UpdateInfo{
-			Movements: *mergeMoves(p1Moves, p2Moves),
-			Phase: phase,
-			Pile: gamemanager.HAND_PILE,
-			OpenViewCards: make([]uint, 0),
-      SelectableCards: selectableCards,
-		},
+		Content: *p1Info,
 		MessageType: gamemanager.MessageTypeGameplay,
 		Timestamp: timestamp(),
 	})
 
-  if goingFirst {
-    phase = gamemanager.PHASE_OPPONENTS_TURN
-    selectableCards = make([]uint, 0)
-  } else {
-    phase = gamemanager.PHASE_MY_TURN
-    selectableCards = make([]uint, 0, len(r.Game.Players[1].Hand.Cards))
-    for _, thisCard := range r.Game.Players[1].Hand.Cards {
-      selectableCards = append(selectableCards, thisCard.GameID)
-    }
-  }
 	r.ReadyPlayers[1].Conn.WriteJSON(Message[gamemanager.UpdateInfo]{
-		Content: gamemanager.UpdateInfo{
-			Movements: *mergeMoves(p2Moves, p1Moves),
-			Phase: phase,
-			Pile: gamemanager.HAND_PILE,
-			OpenViewCards: make([]uint, 0),
-      SelectableCards: selectableCards,
-		},
+		Content: *p2Info,
 		MessageType: gamemanager.MessageTypeGameplay,
 		Timestamp: timestamp(),
 	})
@@ -392,27 +358,20 @@ func (r *Room) playerLoop(user *User) {
 			break
 		}
 
-    info, err := r.processAction(user, &action)
+    info, oppInfo, err := r.processAction(user, &action)
     if err != nil {
 			log.Println("Error processing game action: ", err)
 			break
     }
 
-    err = r.sendUpdateInfo(user, &info)
+    err = r.sendUpdateInfo(user, info)
     if err != nil {
 			log.Println("Stopped sending to user, endcode: ", err)
 			break
     }
 
     id := r.PlayerToGamePlayerID[user]
-    empty := (make([]gamemanager.CardMovement, 0))
-    err = r.sendUpdateInfo(r.ReadyPlayers[1-id], &gamemanager.UpdateInfo{
-      Movements: *mergeMoves(&empty, &info.Movements),
-      Phase: gamemanager.PHASE_OPPONENTS_TURN,
-      Pile: gamemanager.HAND_PILE,
-      OpenViewCards: make([]uint, 0),
-      SelectableCards: make([]uint, 0),
-    })
+    err = r.sendUpdateInfo(r.ReadyPlayers[1-id], oppInfo)
     if err != nil {
 			log.Println("Stopped sending to user, endcode: ", err)
 			break

@@ -3,12 +3,13 @@ package server_test
 import (
 	"testing"
 
+	"github.com/Zarone/CardGameServer/cmd/gamemanager"
 	"github.com/Zarone/CardGameServer/cmd/server"
 )
 
 func TestMakeRoom(t *testing.T) {
 	roomNum := uint8(1)
-	room := server.MakeRoom(roomNum)
+	room := server.MakeRoom(roomNum, gamemanager.SetupFromDirectory(cardInfoPath))
 	
 	if room == nil {
 		t.Error("makeRoom returned nil")
@@ -33,7 +34,7 @@ func TestMakeRoom(t *testing.T) {
 }
 
 func TestRoomGetPlayersInRoom(t *testing.T) {
-	room := server.MakeRoom(1)
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
 	
 	// Test empty room
 	if count := room.GetPlayersInRoom(); count != 0 {
@@ -66,7 +67,7 @@ func TestRoomGetPlayersInRoom(t *testing.T) {
 }
 
 func TestRoomInitPlayer(t *testing.T) {
-	room := server.MakeRoom(1)
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
 	
 	// Test adding first player
 	user1 := &server.User{IsSpectator: false}
@@ -102,7 +103,7 @@ func TestRoomInitPlayer(t *testing.T) {
 }
 
 func TestRoomRemoveFromRoom(t *testing.T) {
-	room := server.MakeRoom(1)
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
 	
 	// Add a player
 	user := &server.User{IsSpectator: false}
@@ -117,5 +118,5 @@ func TestRoomRemoveFromRoom(t *testing.T) {
 	}
 	
 	// Test removing from empty room
-	server.MakeRoom(2).RemoveFromRoom(user) // Should not panic
+	server.MakeRoom(2, gamemanager.SetupFromDirectory(cardInfoPath)).RemoveFromRoom(user) // Should not panic
 } 

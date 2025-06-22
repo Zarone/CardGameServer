@@ -22,6 +22,11 @@ const (
   BEING_PLAYED          = Pile(13)
 )
 
+func StringToPile(str string) Pile {
+  if str == "HAND" { return HAND_PILE }
+  return TEMPORARY
+}
+
 type MessageType uint 
 
 const (
