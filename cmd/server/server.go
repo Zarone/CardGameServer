@@ -17,6 +17,15 @@ type Server struct {
   cardHandler *gamemanager.CardHandler
 }
 
+// Makes a new server
+func MakeServer(settings *ServerSettings, cardInfoPath string) *Server {
+	return &Server{
+		Rooms: make(map[uint8]*Room),
+		settings: *settings,
+    cardHandler: gamemanager.SetupFromDirectory(cardInfoPath),
+	}
+}
+
 func (s *Server) String() string {
 	str := "[Server: \n" +
 		"    " + s.settings.toString()
@@ -170,13 +179,4 @@ func (s *Server) HandleRoomsAPI(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(html))
-}
-
-// Makes a new server
-func MakeServer(settings *ServerSettings, cardInfoPath string) *Server {
-	return &Server{
-		Rooms: make(map[uint8]*Room),
-		settings: *settings,
-    cardHandler: gamemanager.SetupFromDirectory(cardInfoPath),
-	}
 }

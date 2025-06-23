@@ -2,44 +2,72 @@ package gamemanager
 
 import (
 	"fmt"
-	"math/rand"
 )
 
-type Card struct {
-  ID     uint
-  GameID uint
+
+type Player struct {
+  Deck    CardGroup
+  Hand    CardGroup
+  Discard CardGroup
+  FindID  map[uint]*CardGroup
 }
 
-func (c Card) String() string {
-  return fmt.Sprintf("[ID: %d, GameID: %d]", c.ID, c.GameID)
+func MakePlayer() Player {
+  return Player{
+		Deck: CardGroup{
+			Cards: make([]Card, 0),
+			Pile: DECK_PILE,
+		},
+		Hand: CardGroup{
+			Cards: make([]Card, 0),
+			Pile: HAND_PILE,
+		},
+    Discard: CardGroup{
+      Cards: make([]Card, 0),
+      Pile: DISCARD_PILE,
+    },
+    FindID: make(map[uint]*CardGroup),
+	}
 }
 
-type CardGroup struct {
-  Cards []Card
-  Pile  Pile
+func (p Player) String() string {
+  return fmt.Sprintf("deck: %s\nhand: %s\n", p.Deck.String(), p.Hand.String())
 }
 
-func (cg *CardGroup) shuffle() {
-  rand.Shuffle(len(cg.Cards), func(i, j int) {
-    (cg.Cards)[i], (cg.Cards)[j] = (cg.Cards)[j], (cg.Cards)[i]
-  })
-}
-
-func (cg *CardGroup) find(gameID uint) *Card {
-  for _, card := range cg.Cards {
-    if card.GameID == gameID {
-      return &card
-    }
+func (p *Player) StringToCardGroup(str string) *CardGroup {
+  switch str {
+  case "HAND": return &p.Hand
+  case "DECK": return &p.Deck
+  case "DISCARD": return &p.Discard
   }
+
+  fmt.Println("Unkown String Pile", str)
   return nil
 }
 
-func (cg *CardGroup) String() string {
-  str := ""
-  for _, card := range cg.Cards {
-    str += card.String() + "\n"
+func (p *Player) moveCardTo(gameID uint, to *CardGroup) CardMovement {
+  from := p.FindID[gameID]
+
+  // find the index of the card
+  card, index := from.findCard(gameID)
+  if index == -1 {
+    fmt.Println("COULD NOT FIND CARD WITH GAMEID:", gameID)
   }
-  return str
+
+  // remove from current group
+  from.Cards = append(from.Cards[:index], from.Cards[index+1:]...)
+
+  // add to new group
+  to.Cards = append(to.Cards, card)
+
+  // update FindID
+  p.FindID[gameID] = to
+
+  return CardMovement{
+    GameID: gameID,
+    From: from.Pile,
+    To: to.Pile,
+  }
 }
 
 // Moves "numberOfCards" the top (the end) of given card group into "to"
@@ -81,32 +109,4 @@ func (p *Player) moveFromTopTo(from *CardGroup, to *CardGroup, numberOfCards uin
 
   return &newMovements
 
-}
-
-type Player struct {
-  Deck    CardGroup
-  Hand    CardGroup
-  Discard CardGroup
-  FindID  map[uint]*CardGroup
-}
-
-func (p Player) String() string {
-  return fmt.Sprintf("deck: %s\nhand: %s\n", p.Deck.String(), p.Hand.String())
-}
-
-func MakePlayer() Player {
-  return Player{
-		Deck: CardGroup{
-			Cards: make([]Card, 0),
-			Pile: DECK_PILE,
-		},
-		Hand: CardGroup{
-			Cards: make([]Card, 0),
-			Pile: HAND_PILE,
-		},
-    Discard: CardGroup{
-      Cards: make([]Card, 0),
-      Pile: DISCARD_PILE,
-    },
-	}
 }

@@ -45,50 +45,6 @@ type CardFilter struct {
 }
 
 type CountRestriction struct {
-  AT_LEAST  int `json:"atLeast,omitempty"`
-  AT_MOST   int `json:"atMost,omitempty"`
+  AtLeast int `json:"atLeast,omitempty"`
+  AtMost  int `json:"atMost,omitempty"`
 }
-
-// example usage of CardEffect & CardTarget & CardFilter: 
-/*
-
-Ultra Ball:
-
-THEN([
-  MOVE(THIS, DISCARD),
-  MOVE(
-    SELECT(JUST(HAND,COUNT(2,2))), 
-    DISCARD
-  ),
-  MOVE(
-    SELECT(JUST(DECK,COUNT(1,1),TYPE(POKEMON))),
-    HAND
-  ),
-  SHUFFLE
-])
-
-
-Super Rod:
-
-THEN([
-  MOVE(
-    SELECT(
-      OR(
-        JUST(TYPE(POKEMON)),
-        JUST(TYPE(ENERGY))
-      ), 
-      COUNT(1,3)
-    ), DECK
-  ),
-  SHUFFLE
-])
-
-
-Professor's Research:
-
-THEN([
-  MOVE(ALL(HAND), DISCARD)
-  MOVE(TOP(JUST(DECK), COUNT(7,7)), HAND)
-])
-
-*/

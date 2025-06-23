@@ -47,6 +47,20 @@ type Room struct {
 	RoomDescription         RoomDescription
 }
 
+func MakeRoom(roomNumber uint8, cardHandler *gamemanager.CardHandler) *Room {
+	ret := &Room{
+		PlayerToGamePlayerID: make(map[*User]uint8),
+		Connections: make(map[*User]bool),
+		Game: gamemanager.MakeGame(cardHandler),
+		ReadyPlayers: make([]*User, 0),
+		ExpectingCoinFlip: CoinFlipUnset,
+		RoomNumber: roomNumber,
+		RoomDescription: DESC_JUST_CREATED,
+		barrier: NewBarrier(int(PlayersToStartGame)),
+	}
+	return ret
+}
+
 // GetPlayersInRoom returns the number of players in the room,
 // excluding spectators
 func (r *Room) GetPlayersInRoom() uint8 {
@@ -385,18 +399,4 @@ func (r *Room) wait(newDescription RoomDescription) {
 	r.barrier.Wait()
 	r.RoomDescription = newDescription
 	fmt.Println("End wait for:", newDescription)
-}
-
-func MakeRoom(roomNumber uint8, cardHandler *gamemanager.CardHandler) *Room {
-	ret := &Room{
-		PlayerToGamePlayerID: make(map[*User]uint8),
-		Connections: make(map[*User]bool),
-		Game: gamemanager.MakeGame(cardHandler),
-		ReadyPlayers: make([]*User, 0),
-		ExpectingCoinFlip: CoinFlipUnset,
-		RoomNumber: roomNumber,
-		RoomDescription: DESC_JUST_CREATED,
-		barrier: NewBarrier(int(PlayersToStartGame)),
-	}
-	return ret
 }

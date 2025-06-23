@@ -9,7 +9,7 @@ import (
 
 func TestMakeRoom(t *testing.T) {
 	roomNum := uint8(1)
-	room := server.MakeRoom(roomNum, gamemanager.SetupFromDirectory(cardInfoPath))
+	room := server.MakeRoom(roomNum, gamemanager.SetupFromDirectory(cardInfoPath1))
 	
 	if room == nil {
 		t.Error("makeRoom returned nil")
@@ -34,7 +34,7 @@ func TestMakeRoom(t *testing.T) {
 }
 
 func TestRoomGetPlayersInRoom(t *testing.T) {
-	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath1))
 	
 	// Test empty room
 	if count := room.GetPlayersInRoom(); count != 0 {
@@ -67,7 +67,7 @@ func TestRoomGetPlayersInRoom(t *testing.T) {
 }
 
 func TestRoomInitPlayer(t *testing.T) {
-	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath1))
 	
 	// Test adding first player
 	user1 := &server.User{IsSpectator: false}
@@ -103,7 +103,7 @@ func TestRoomInitPlayer(t *testing.T) {
 }
 
 func TestRoomRemoveFromRoom(t *testing.T) {
-	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath))
+	room := server.MakeRoom(1, gamemanager.SetupFromDirectory(cardInfoPath1))
 	
 	// Add a player
 	user := &server.User{IsSpectator: false}
@@ -118,5 +118,5 @@ func TestRoomRemoveFromRoom(t *testing.T) {
 	}
 	
 	// Test removing from empty room
-	server.MakeRoom(2, gamemanager.SetupFromDirectory(cardInfoPath)).RemoveFromRoom(user) // Should not panic
+	server.MakeRoom(2, gamemanager.SetupFromDirectory(cardInfoPath1)).RemoveFromRoom(user) // Should not panic
 } 

@@ -17,8 +17,9 @@ type StaticCardDataRaw struct {
   Name          string      `json:"name,omitempty"`
   ImageSrc      string      `json:"imageSrc"`
   Alias         Alias       `json:"alias,omitempty"`
-  PreCondition  Expression  `json:"preCondition,omitempty"`
+  PreCondition  *Expression  `json:"preCondition,omitempty"`
   Effect        *CardEffect `json:"effect,omitempty"`
+  CardType      string      `json:"cardType,omitempty"`
 }
 
 func (cd *StaticCardDataRaw) UnmarshalJSON(data []byte) error {
@@ -38,14 +39,17 @@ type StaticCardData struct {
   Name          string
   ImageSrc      string
   Alias         *StaticCardData
-  PreCondition  Expression
+  PreCondition  *Expression
   Effect        *CardEffect
+  CardType      string
 }
 
 type CardHandler struct {
   cardLookup map[string]([]StaticCardData)
 }
 
+// Takes a string representing the available cards and returns a 
+// cardHandler with set1 set to those cards
 func SetupFromString(content string) *CardHandler {
 	cardHandler := &CardHandler{
 		cardLookup: make(map[string][]StaticCardData, 1),
@@ -60,6 +64,8 @@ func SetupFromString(content string) *CardHandler {
 	return cardHandler
 }
 
+// Takes a directory path and returns a cardHandler generated from the
+// text files contained in it
 func SetupFromDirectory(path string) *CardHandler {
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -107,6 +113,7 @@ func processSet(setName string, content []byte, ch *CardHandler, rawLookups map[
 			Alias:        nil,
 			PreCondition: element.PreCondition,
 			Effect:       element.Effect,
+      CardType:     element.CardType,
 		})
 	}
 	return nil

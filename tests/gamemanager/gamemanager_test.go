@@ -62,7 +62,7 @@ func TestGameStartGame(t *testing.T) {
 	game.AddPlayer()
 	
 	// Set up players with some cards
-	deck := []uint{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	deck := []uint{1, 1, 1, 1, 1, 2, 2, 2, 2, 2}
 	game.SetupPlayer(0, deck)
 	game.SetupPlayer(1, deck)
 	
@@ -241,13 +241,14 @@ func TestPlayUltraBall(t *testing.T) {
         "args": [
           {
             "kind": "MOVE",
-            "target": { "kind": "THIS" },
+            "target": { "kind": "TARGET", "targetType": "THIS" },
             "to": "DISCARD"
           },
           {
             "kind": "MOVE",
             "target": {
-              "kind": "SELECT",
+              "kind": "TARGET",
+              "targetType": "SELECT",
               "filter": {
                 "kind": "JUST",
                 "pile": "HAND",
@@ -273,9 +274,18 @@ func TestPlayUltraBall(t *testing.T) {
 	game.SetupPlayer(1, deck)
 	
 	// Start the game
-	game.StartGame(true)
+  p1Start, _ := game.StartGame(true)
+  strData, err := json.Marshal(p1Start)
+  if err != nil {
+    fmt.Println("Error getting json", err)
+  }
+  fmt.Println("start info", string(strData))
 
-  info, _, err := game.ProcessAction(0, &gamemanager.Action{
+  if len(p1Start.SelectableCards) != 3 {
+    t.Error("Initial selectable cards not correct")
+  }
+
+  info, oppInfo, err := game.ProcessAction(0, &gamemanager.Action{
     ActionType: gamemanager.ActionTypeSelectCard,
     SelectedCards: append(make([]uint, 0, 1), 2),
     From: gamemanager.HAND_PILE,
@@ -284,11 +294,15 @@ func TestPlayUltraBall(t *testing.T) {
     fmt.Println("Error processing action:", err)
   }
 
-  strData, err := json.Marshal(info)
+  strData, err = json.Marshal(info)
   if err != nil {
     fmt.Println("Error getting json", err)
   }
   fmt.Println("resulting info", string(strData))
+
+  if oppInfo == nil {
+    t.Error("no opponent info")
+  }
 
   // should be selecting cards after played ultra ball
   if info.Phase != gamemanager.PHASE_SELECTING_CARDS {
@@ -298,7 +312,7 @@ func TestPlayUltraBall(t *testing.T) {
   if len(info.Movements) != 1 || 
     info.Movements[0].From != gamemanager.HAND_PILE || 
     info.Movements[0].To != gamemanager.DISCARD_PILE || 
-    info.Movements[0].CardID != 1 {
+    info.Movements[0].GameID != 2 {
     
     t.Error("Does not send ultra ball to discard")
   }
@@ -318,4 +332,55 @@ func TestPlayUltraBall(t *testing.T) {
   if len(game.Players[0].Hand.Cards) != 2 || len(game.Players[0].Discard.Cards) != 1 {
     t.Error("didn't actually discard ultra ball")
   }
+
+  info, oppInfo, err = game.ProcessAction(0, &gamemanager.Action{
+    ActionType: gamemanager.ActionTypeFinishSelection,
+    SelectedCards: append(make([]uint, 0, 2), 0, 1),
+    From: gamemanager.HAND_PILE,
+  })
+
+  if oppInfo == nil {
+    t.Error("No opponent info")
+  }
+
+  if err != nil {
+    fmt.Println("Error processing action:", err)
+  }
+
+  strData, err = json.Marshal(info)
+  if err != nil {
+    fmt.Println("Error getting json", err)
+  }
+  fmt.Println("resulting info", string(strData))
+
+  if info.Phase != gamemanager.PHASE_MY_TURN {
+    t.Errorf("Not set back to my turn")
+  }
+
+  if len(info.Movements) != 2 {
+    t.Error("Does not send cards to discard")
+  }
+  // assert they move to discard
+  for _, move := range info.Movements {
+    if move.From != gamemanager.HAND_PILE || move.To != gamemanager.DISCARD_PILE {
+      t.Error("Invalid move")
+    }
+  }
+
+  if info.Pile != gamemanager.HAND_PILE {
+    t.Error("Does not keep hand open")
+  }
+
+  if len(info.OpenViewCards) != 0 {
+    t.Error("open view cards is non-empty")
+  }
+
+  if len(info.SelectableCards) != 0 {
+    t.Error("cards in hand aren't correctly selectable")
+  }
+
+  if len(game.Players[0].Hand.Cards) != 0 || len(game.Players[0].Discard.Cards) != 3 {
+    t.Error("didn't actually discard ultra ball")
+  }
+
 }
