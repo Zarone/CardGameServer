@@ -3,22 +3,22 @@ package gamemanager
 // These variables should correspond exactly with 
 // enums in client code
 
-type Pile uint
+type Pile string
 
 const (
   TEMPORARY             = Pile(0)
-  HAND_PILE             = Pile(1)
+  HAND_PILE             = Pile("HAND")
   RESERVE_PILE          = Pile(2)
   SPECIAL_PILE          = Pile(3)
   BATTLEFIELD_PILE      = Pile(4)
-  DISCARD_PILE          = Pile(5)
-  DECK_PILE             = Pile(6)
-  OPP_HAND_PILE         = Pile(7)
+  DISCARD_PILE          = Pile("DISCARD")
+  DECK_PILE             = Pile("DECK")
+  OPP_HAND_PILE         = Pile("OPP_HAND")
   OPP_RESERVE_PILE      = Pile(8)
   OPP_SPECIALS_PILE     = Pile(9)
   OPP_BATTLEFIELD_PILE  = Pile(10)
-  OPP_DISCARD_PILE      = Pile(11)
-  OPP_DECK_PILE         = Pile(12)
+  OPP_DISCARD_PILE      = Pile("OPP_DISCARD")
+  OPP_DECK_PILE         = Pile("OPP_DECK")
   BEING_PLAYED          = Pile(13)
 )
 

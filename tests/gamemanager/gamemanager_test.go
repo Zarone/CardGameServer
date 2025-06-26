@@ -94,9 +94,9 @@ func TestGameStartGame(t *testing.T) {
 
 	// Verify that cards in hand are not in deck
 	player1 := game.Players[0]
-	for _, card := range player1.Hand.Cards {
+	for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 		// Check if card is still in deck
-		for _, deckCard := range player1.Deck.Cards {
+		for _, deckCard := range player1.PlayerPiles[gamemanager.DECK_PILE].Cards {
 			if card.GameID == deckCard.GameID {
 				t.Errorf("Card with GameID %d found in both hand and deck", card.GameID)
 			}
@@ -110,7 +110,7 @@ func TestGameStartGame(t *testing.T) {
 		moveGameIDs[move.GameID] = true
 	}
 
-	for _, card := range player1.Hand.Cards {
+	for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 		fmt.Println(card, "in hand")
 		if !moveGameIDs[card.GameID] {
 			t.Errorf("Card with GameID %d in hand but not listed in moves", card.GameID)
@@ -119,7 +119,7 @@ func TestGameStartGame(t *testing.T) {
 
 	for cardID := range moveGameIDs {
 		found := false
-		for _, card := range player1.Hand.Cards {
+		for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 			if card.GameID == cardID {
 				found = true
 				break
@@ -172,9 +172,9 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 
 	// Verify that cards in hand are not in deck
 	player1 := game.Players[0]
-	for _, card := range player1.Hand.Cards {
+	for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 		// Check if card is still in deck
-		for _, deckCard := range player1.Deck.Cards {
+		for _, deckCard := range player1.PlayerPiles[gamemanager.DECK_PILE].Cards {
 			if card.GameID == deckCard.GameID {
 				t.Errorf("Card with GameID %d found in both hand and deck", card.GameID)
 			}
@@ -188,7 +188,7 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 		moveGameIDs[move.GameID] = true
 	}
 
-	for _, card := range player1.Hand.Cards {
+	for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 		if !moveGameIDs[card.GameID] {
 			t.Errorf("Card with GameID %d in hand but not listed in moves", card.GameID)
 		}
@@ -196,7 +196,7 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 
 	for gameID := range moveGameIDs {
 		found := false
-		for _, card := range player1.Hand.Cards {
+		for _, card := range player1.PlayerPiles[gamemanager.HAND_PILE].Cards {
 			if card.GameID == gameID {
 				found = true
 				break
@@ -208,8 +208,8 @@ func TestGameStartGameWithFewCards(t *testing.T) {
 	}
 
 	// Verify deck is empty after moving all cards
-	if len(player1.Deck.Cards) != 0 {
-		t.Errorf("Expected empty deck after moving all cards, got %d cards", len(player1.Deck.Cards))
+	if len(player1.PlayerPiles[gamemanager.DECK_PILE].Cards) != 0 {
+		t.Errorf("Expected empty deck after moving all cards, got %d cards", len(player1.PlayerPiles[gamemanager.DECK_PILE].Cards))
 	}
 } 
 
@@ -329,7 +329,8 @@ func TestPlayUltraBall(t *testing.T) {
     t.Error("cards in hand aren't correctly selectable")
   }
 
-  if len(game.Players[0].Hand.Cards) != 2 || len(game.Players[0].Discard.Cards) != 1 {
+  if len(game.Players[0].PlayerPiles[gamemanager.HAND_PILE].Cards) != 2 || 
+  len(game.Players[0].PlayerPiles[gamemanager.DISCARD_PILE].Cards) != 1 {
     t.Error("didn't actually discard ultra ball")
   }
 
@@ -379,7 +380,8 @@ func TestPlayUltraBall(t *testing.T) {
     t.Error("cards in hand aren't correctly selectable")
   }
 
-  if len(game.Players[0].Hand.Cards) != 0 || len(game.Players[0].Discard.Cards) != 3 {
+  if len(game.Players[0].PlayerPiles[gamemanager.HAND_PILE].Cards) != 0 || 
+  len(game.Players[0].PlayerPiles[gamemanager.DISCARD_PILE].Cards) != 3 {
     t.Error("didn't actually discard ultra ball")
   }
 

@@ -1,26 +1,32 @@
 [
   {
     "name": "card 1",
-    "imageSrc": "card1"
+    "imageSrc": "card1",
+    "cardType": "SPECIAL_CHARACTER"
   },
   {
     "name": "card 2",
-    "imageSrc": "card2"
+    "imageSrc": "card2",
+    "cardType": "SPECIAL_CHARACTER"
   },
   {
     "name": "card 3",
-    "imageSrc": "card3"
+    "imageSrc": "card3",
+    "cardType": "SPECIAL_CHARACTER"
   },
   {
     "name": "card 4",
-    "imageSrc": "card4"
+    "imageSrc": "card4",
+    "cardType": "BASIC_CHARACTER"
   },
   {
     "name": "card 5",
-    "imageSrc": "card5"
+    "imageSrc": "card5",
+    "cardType": "EVENT"
   },
   {
     "name": "Ultra Ball",
+    "cardType": "ACTION",
     "imageSrc": "card6",
     "preCondition": {
       "kind": "OPERATOR",
@@ -59,13 +65,31 @@
             }
           },
           "to": "DISCARD"
+        },
+        {
+          "kind": "MOVE",
+          "target": {
+            "kind": "TARGET",
+            "targetType": "SELECT",
+            "filter": {
+              "kind": "JUST",
+              "type": "BASIC_CHARACTER",
+              "pile": "DECK",
+              "count": {
+                "atLeast": 1,
+                "atMost": 1
+              }
+            }
+          },
+          "to": "HAND"
         }
       ]
     }
   },
   {
     "name": "Decidueye GX",
-    "imageSrc": "card7"
+    "imageSrc": "card7",
+    "cardType": "BASIC_CHARACTER"
   },
   {
     "imageSrc": "card8",

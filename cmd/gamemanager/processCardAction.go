@@ -14,18 +14,17 @@ func (g *Game) getApplicableCards(user uint8, filter *CardFilter) *[]uint {
     fmt.Println("UNHANDLED FILTER KIND:", filter.Kind)
     return nil
   case "JUST": 
-    if filter.Pile == "HAND" {
-      cards := make([]uint, 0)
-      for _, card := range g.Players[user].Hand.Cards {
-        if filter.Type == "" || g.CardHandler.cardLookup["set1"][card.ID].CardType == filter.Type {
-          cards = append(cards, card.GameID)
-        }
+    cards := make([]uint, 0)
+
+    playerPile, ok := g.Players[user].PlayerPiles[Pile(filter.Pile)]
+    if !ok { fmt.Println("Could not find pile", filter.Pile); return nil }
+
+    for _, card := range playerPile.Cards {
+      if filter.Type == "" || g.CardHandler.cardLookup["set1"][card.ID].CardType == filter.Type {
+        cards = append(cards, card.GameID)
       }
-      return &cards
-    } else {
-      fmt.Println("UNHANDLED FILTER PILE:", filter.Pile)
-      return nil
     }
+    return &cards
   default: 
     fmt.Println("UNKNOWN FILTER KIND:", filter.Kind)
     return nil
@@ -34,14 +33,16 @@ func (g *Game) getApplicableCards(user uint8, filter *CardFilter) *[]uint {
 
 func (g *Game) getPlayableCards(user uint8) *[]uint {
   playable := make([]uint, 0)
-  for _, card := range g.Players[user].Hand.Cards {
+  playerHand, ok := g.Players[user].PlayerPiles[HAND_PILE]
+  if !ok { fmt.Println("Could not find hand"); return nil }
+  for _, card := range playerHand.Cards {
     cond := g.CardHandler.cardLookup["set1"][card.ID].PreCondition
     condEval := true
     if cond != nil {
       var err error
       condEval, err = g.evaluateBoolExpression(user, cond)
       if err != nil {
-        fmt.Printf("Error evaluating precondition on card with CardID: %s\n", card.ID)
+        fmt.Printf("Error evaluating precondition on card with CardID: %d\n", card.ID)
       }
     }
 
@@ -78,6 +79,7 @@ func (g *Game) processCardAction(user uint8, cardEffect *CardEffect, action *Act
 
       info.Pile = localInfo.Pile
       info.SelectableCards = localInfo.SelectableCards
+      info.SelectionRestrictions = localInfo.SelectionRestrictions
       info.OpenViewCards = localInfo.OpenViewCards
       info.Phase = localInfo.Phase
       for _, movement := range localInfo.Movements {
@@ -116,11 +118,14 @@ func (g *Game) processCardAction(user uint8, cardEffect *CardEffect, action *Act
 
     movements := make([]CardMovement, 0)
     for _, cardGameID := range selectedCards {
+      group, ok := g.Players[user].PlayerPiles[Pile(effect.To)]
+      if !ok { return nil, false, fmt.Errorf("could not find pile %s\n", effect.To) }
+
       movements = append(
         movements, 
         g.Players[user].moveCardTo(
           cardGameID, 
-          g.Players[user].StringToCardGroup(effect.To),
+          group,
         ),
       )
     }
@@ -150,6 +155,8 @@ func (g *Game) processCardAction(user uint8, cardEffect *CardEffect, action *Act
         lastEffect: effect,
         inner: g.CardActionStack,
       }
+
+      fmt.Println("Target", effect.Filter.Count)
 
       return &UpdateInfo{
         Movements: make([]CardMovement, 0),

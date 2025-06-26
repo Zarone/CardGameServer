@@ -1,13 +1,20 @@
 package gamemanager
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func (g *Game) getGameVariable(user uint8, varName string) (*Expression, error) {
   switch varName {
   case "CARDS_IN_HAND":
+    hand, ok := g.Players[user].PlayerPiles[HAND_PILE]
+    if !ok {
+      return nil, errors.New("Could not get hand")
+    }
     return &Expression{
       Kind: "CONSTANT",
-      Val: len(g.Players[user].Hand.Cards),
+      Val: len(hand.Cards),
     }, nil
   default:
     return &Expression{}, fmt.Errorf("UNKNOWN GAME VARIABLE: %s\n", varName)

@@ -6,43 +6,34 @@ import (
 
 
 type Player struct {
-  Deck    CardGroup
-  Hand    CardGroup
-  Discard CardGroup
+  //Deck    CardGroup
+  //Hand    CardGroup
+  //Discard CardGroup
+  PlayerPiles map[Pile]*CardGroup
   FindID  map[uint]*CardGroup
 }
 
-func MakePlayer() Player {
-  return Player{
-		Deck: CardGroup{
-			Cards: make([]Card, 0),
-			Pile: DECK_PILE,
-		},
-		Hand: CardGroup{
-			Cards: make([]Card, 0),
-			Pile: HAND_PILE,
-		},
-    Discard: CardGroup{
+func MakePlayer(piles []Pile) Player {
+  playerPiles := make(map[Pile]*CardGroup, 0)
+  for _, pile := range piles {
+    playerPiles[pile] = &CardGroup{
       Cards: make([]Card, 0),
-      Pile: DISCARD_PILE,
-    },
+      Pile: pile,
+    }
+  }
+
+  return Player{
+    PlayerPiles: playerPiles,
     FindID: make(map[uint]*CardGroup),
 	}
 }
 
 func (p Player) String() string {
-  return fmt.Sprintf("deck: %s\nhand: %s\n", p.Deck.String(), p.Hand.String())
-}
-
-func (p *Player) StringToCardGroup(str string) *CardGroup {
-  switch str {
-  case "HAND": return &p.Hand
-  case "DECK": return &p.Deck
-  case "DISCARD": return &p.Discard
-  }
-
-  fmt.Println("Unkown String Pile", str)
-  return nil
+  return fmt.Sprintf(
+    "deck: %d\nhand: %d\n", 
+    len(p.PlayerPiles["DECK"].Cards), 
+    len(p.PlayerPiles["DISCARD"].Cards),
+  )
 }
 
 func (p *Player) moveCardTo(gameID uint, to *CardGroup) CardMovement {
@@ -108,5 +99,4 @@ func (p *Player) moveFromTopTo(from *CardGroup, to *CardGroup, numberOfCards uin
   from.Cards = (from.Cards)[:len(from.Cards)-int(numberOfCards)]
 
   return &newMovements
-
 }

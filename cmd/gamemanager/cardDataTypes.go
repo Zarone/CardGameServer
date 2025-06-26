@@ -25,7 +25,7 @@ type CardEffect struct {
   To    string  `json:"to,omitempty"`
 
   // if Kind="TARGET"
-  TargetType string `json:"targetType,omitempty"` // SELECT, ALL, TOP, THIS
+  TargetType string `json:"targetType,omitempty"` // SELECT, ALL, THIS
   Filter CardFilter `json:"filter,omitempty"`
 }
 
@@ -42,6 +42,7 @@ type CardFilter struct {
   // If Kind="JUST", Optionally Include These
   Pile  string  `json:"pile,omitempty"`
   Type  string  `json:"type,omitempty"`
+  Top   int     `json:"top,omitempty"` // if you wanted to filter for the top 7 cards of deck, for example
 }
 
 type CountRestriction struct {
