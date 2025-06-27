@@ -5,12 +5,16 @@ import (
 	"fmt"
 )
 
+type StaticPileData struct {
+  publicKnowledge bool
+}
+
 type Game struct {
 	Players         []Player
 	CardIndex       uint
   CardHandler     *CardHandler
   CardActionStack *CardActionStack
-  PerPlayerPiles  []Pile
+  PerPlayerPiles  map[Pile]*StaticPileData
 }
 
 func MakeGame(cardHandler *CardHandler) *Game {
@@ -19,7 +23,11 @@ func MakeGame(cardHandler *CardHandler) *Game {
 		Players: make([]Player, 0, 2),
     CardHandler: cardHandler,
     CardActionStack: nil,
-    PerPlayerPiles: []Pile{HAND_PILE, DISCARD_PILE, DECK_PILE},
+    PerPlayerPiles: map[Pile]*StaticPileData{
+      HAND_PILE: {publicKnowledge: false}, 
+      DECK_PILE: {publicKnowledge: false}, 
+      DISCARD_PILE: {publicKnowledge: true}, 
+    },
 	}
 }
 
@@ -109,7 +117,7 @@ func (g *Game) StartGame(goingFirst bool) (*UpdateInfo, *UpdateInfo) {
   }
 
   out1 := UpdateInfo{
-    Movements: *mergeMoves(p1Moves, p2Moves),
+    Movements: *g.mergeMoves(p1Moves, p2Moves),
     Phase: phase,
     Pile: HAND_PILE,
     OpenViewCards: make([]uint, 0),
@@ -124,7 +132,7 @@ func (g *Game) StartGame(goingFirst bool) (*UpdateInfo, *UpdateInfo) {
     selectableCards = *g.getPlayableCards(1) 
   }
   out2 := UpdateInfo{
-    Movements: *mergeMoves(p2Moves, p1Moves),
+    Movements: *g.mergeMoves(p2Moves, p1Moves),
     Phase: phase,
     Pile: HAND_PILE,
     OpenViewCards: make([]uint, 0),
@@ -162,7 +170,7 @@ func (g *Game) ProcessAction(user uint8, action *Action) (*UpdateInfo, *UpdateIn
         if err != nil {
           return nil, nil, err
         }
-        return info, toOppInfo(info), nil
+        return info, g.toOppInfo(info), nil
       } else {
         movements := append(
           make([]CardMovement, 0, 1), 
@@ -178,7 +186,7 @@ func (g *Game) ProcessAction(user uint8, action *Action) (*UpdateInfo, *UpdateIn
           OpenViewCards: make([]uint, 0),
           SelectableCards: *g.getPlayableCards(user),
         }
-        return info, toOppInfo(info), nil
+        return info, g.toOppInfo(info), nil
       }
     }
   } else if ActionType(action.ActionType) == ActionTypeFinishSelection {
@@ -187,7 +195,7 @@ func (g *Game) ProcessAction(user uint8, action *Action) (*UpdateInfo, *UpdateIn
       if err != nil {
         return nil, nil, err
       }
-      return info, toOppInfo(info), nil
+      return info, g.toOppInfo(info), nil
     }
 
     playerHand, ok := g.Players[user].PlayerPiles[HAND_PILE]
@@ -215,7 +223,7 @@ func (g *Game) ProcessAction(user uint8, action *Action) (*UpdateInfo, *UpdateIn
       OpenViewCards: make([]uint, 0),
       SelectableCards: selectableCards,
     }
-    return info, toOppInfo(info), nil
+    return info, g.toOppInfo(info), nil
   }
 
   return &UpdateInfo{}, &UpdateInfo{}, fmt.Errorf("Not sure how to handle action")

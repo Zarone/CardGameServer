@@ -15,8 +15,9 @@ func (c Card) String() string {
 }
 
 type CardGroup struct {
-  Cards []Card
-  Pile  Pile
+  Cards           []Card
+  Pile            Pile
+  PublicKnowledge bool
 }
 
 func (cg *CardGroup) shuffle() {

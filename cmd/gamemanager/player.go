@@ -6,19 +6,17 @@ import (
 
 
 type Player struct {
-  //Deck    CardGroup
-  //Hand    CardGroup
-  //Discard CardGroup
   PlayerPiles map[Pile]*CardGroup
   FindID  map[uint]*CardGroup
 }
 
-func MakePlayer(piles []Pile) Player {
+func MakePlayer(piles map[Pile]*StaticPileData) Player {
   playerPiles := make(map[Pile]*CardGroup, 0)
-  for _, pile := range piles {
+  for pile, data := range piles {
     playerPiles[pile] = &CardGroup{
       Cards: make([]Card, 0),
       Pile: pile,
+      PublicKnowledge: data.publicKnowledge,
     }
   }
 
@@ -42,7 +40,7 @@ func (p *Player) moveCardTo(gameID uint, to *CardGroup) CardMovement {
   // find the index of the card
   card, index := from.findCard(gameID)
   if index == -1 {
-    fmt.Println("COULD NOT FIND CARD WITH GAMEID:", gameID)
+    fmt.Println("could not find card with gameid:", gameID)
   }
 
   // remove from current group
@@ -58,6 +56,7 @@ func (p *Player) moveCardTo(gameID uint, to *CardGroup) CardMovement {
     GameID: gameID,
     From: from.Pile,
     To: to.Pile,
+    CardID: card.ID,
   }
 }
 
